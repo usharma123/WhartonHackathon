@@ -18,8 +18,6 @@
     "seed:demo": "node scripts/seed-demo.mjs",
     "seed:source": "node scripts/seed-source-data.mjs",
     "refresh:source-runtime": "node scripts/refresh-source-runtime.mjs",
-    "scrape:expedia": "./.venv/bin/python scripts/scrape_expedia_subset.py",
-    "seed:expedia": "tsx scripts/seed-expedia-subset.ts",
     "demo:live": "tsx scripts/live-review-demo.ts",
     "check": "pnpm run typecheck && pnpm run test"
   },

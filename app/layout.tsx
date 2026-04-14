@@ -19,7 +19,7 @@ const display = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "ReviewGap — Expedia",
+  title: "ReviewGap",
   description: "Write a review worth reading.",
 };
 

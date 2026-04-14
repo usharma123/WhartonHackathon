@@ -10,7 +10,6 @@ type ActionCtx = {
 const refs = {
   getProperty: "reviewGapInternal:getProperty",
   patchProperty: "reviewGapInternal:patchProperty",
-  getPropertyValidationState: "reviewGapInternal:getPropertyValidationState",
   listPropertyFacetMetrics: "reviewGapInternal:listPropertyFacetMetrics",
   listPropertyFacetLiveSignals: "reviewGapInternal:listPropertyFacetLiveSignals",
   replacePropertyFacetLiveSignals: "reviewGapInternal:replacePropertyFacetLiveSignals",
@@ -41,8 +40,8 @@ export function createConvexActionStore(ctx: ActionCtx): ReviewGapStore {
     async patchProperty(propertyId, patch) {
       return ctx.runMutation(refs.patchProperty as any, { propertyId, patch });
     },
-    async getPropertyValidationState(propertyId) {
-      return ctx.runQuery(refs.getPropertyValidationState as any, { propertyId });
+    async getPropertyValidationState() {
+      throw new Error("getPropertyValidationState is not supported from runtime actions.");
     },
     async listPropertyFacetMetrics(propertyId) {
       return ctx.runQuery(refs.listPropertyFacetMetrics as any, { propertyId });

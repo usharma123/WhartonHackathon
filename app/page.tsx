@@ -4,6 +4,13 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "../convex/_generated/api";
+import { appendTranscriptToDraft } from "../src/lib/audio";
+import {
+  REALTIME_AUDIO_SAMPLE_RATE,
+  float32ToPCM16,
+  insertOrderedItemId,
+  pcm16ToBase64,
+} from "../src/lib/realtimeAudio";
 
 type DemoProperty = {
   propertyId: string;
@@ -17,20 +24,6 @@ type DemoProperty = {
   reviewCount: number;
   demoFlags: string[];
   demoScenario?: string;
-  sourceVendor?: "expedia";
-  sourceUrl?: string;
-  lastValidatedAt?: string;
-  validationStatus?: "idle" | "refreshing" | "success" | "error";
-  liveReviewCount?: number;
-};
-
-type PropertyValidationState = {
-  propertyId: string;
-  sourceVendor?: "expedia";
-  sourceUrl?: string;
-  lastValidatedAt?: string;
-  validationStatus: "idle" | "refreshing" | "success" | "error";
-  liveReviewCount: number;
 };
 
 type ChatMessage =
@@ -50,9 +43,6 @@ export default function HomePage() {
   const analyzeDraftReview = useAction(api.reviewGapActions.analyzeDraftReview);
   const selectNextQuestion = useAction(api.reviewGapActions.selectNextQuestion);
   const submitFollowUpAnswer = useAction(api.reviewGapActions.submitFollowUpAnswer);
-  const validatePropertyFromExpediaUrl = useAction(
-    api.reviewGapActions.validatePropertyFromExpediaUrl,
-  );
 
   const [view, setView] = useState<View>("property");
   const [propertyId, setPropertyId] = useState<string>("");
@@ -69,10 +59,6 @@ export default function HomePage() {
   const [hasDraft, setHasDraft] = useState(false);
   const [followUpCount, setFollowUpCount] = useState(0);
   const [askedFacets, setAskedFacets] = useState<string[]>([]);
-  const [expediaUrl, setExpediaUrl] = useState("");
-  const [isValidatingProperty, setIsValidatingProperty] = useState(false);
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const [validationNotice, setValidationNotice] = useState<string | null>(null);
 
   const chatBodyRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -104,21 +90,6 @@ export default function HomePage() {
     [properties, propertyId],
   );
 
-  const validationState = useQuery(
-    api.reviewGapPublic.getPropertyValidationState,
-    propertyId ? { propertyId } : "skip",
-  ) as PropertyValidationState | null | undefined;
-
-  useEffect(() => {
-    setValidationError(null);
-    setValidationNotice(null);
-    if (selectedProperty?.sourceUrl) {
-      setExpediaUrl(selectedProperty.sourceUrl);
-      return;
-    }
-    setExpediaUrl("");
-  }, [propertyId, selectedProperty?.sourceUrl]);
-
   const uid = () => Math.random().toString(36).slice(2, 10);
 
   function startReview() {
@@ -145,36 +116,6 @@ export default function HomePage() {
 
   function backToProperty() {
     setView("property");
-  }
-
-  async function validateSelectedProperty() {
-    const trimmed = expediaUrl.trim();
-    if (!propertyId || !trimmed || isValidatingProperty) {
-      return;
-    }
-    setValidationError(null);
-    setValidationNotice(null);
-    setIsValidatingProperty(true);
-    try {
-      const result = await validatePropertyFromExpediaUrl({
-        propertyId,
-        expediaUrl: trimmed,
-      });
-      setValidationNotice(
-        result.sampledReviewCount > 0
-          ? `Validated from Expedia with ${result.sampledReviewCount} sampled review${
-              result.sampledReviewCount === 1 ? "" : "s"
-            }.`
-          : "Validated the Expedia listing. No visible review snippets were extracted from this page shape, so seeded review signals remain in use.",
-      );
-      setExpediaUrl(result.validationState.sourceUrl ?? trimmed);
-    } catch (caught) {
-      setValidationError(
-        caught instanceof Error ? caught.message : "Could not validate this Expedia page.",
-      );
-    } finally {
-      setIsValidatingProperty(false);
-    }
   }
 
   async function sendUserMessage() {
@@ -343,10 +284,10 @@ export default function HomePage() {
     <>
       <nav className="nav">
         <div className="nav-brand">
-          <span className="mark">E</span>
+          <span className="mark">R</span>
           <div>
-            <div>Expedia</div>
-            <div className="brand-sub">ReviewGap</div>
+            <div>ReviewGap</div>
+            <div className="brand-sub">Traveler Demo</div>
           </div>
         </div>
         <div className="nav-links">
@@ -372,13 +313,6 @@ export default function HomePage() {
             selected={selectedProperty}
             onSelect={setPropertyId}
             onStart={startReview}
-            validationState={validationState ?? null}
-            expediaUrl={expediaUrl}
-            onExpediaUrlChange={setExpediaUrl}
-            onValidate={validateSelectedProperty}
-            isValidatingProperty={isValidatingProperty}
-            validationError={validationError}
-            validationNotice={validationNotice}
           />
         ) : (
           <ChatScreen
@@ -398,13 +332,6 @@ export default function HomePage() {
             chatBodyRef={chatBodyRef}
             textareaRef={textareaRef}
             error={error}
-            validationState={validationState ?? null}
-            expediaUrl={expediaUrl}
-            onExpediaUrlChange={setExpediaUrl}
-            onValidate={validateSelectedProperty}
-            isValidatingProperty={isValidatingProperty}
-            validationError={validationError}
-            validationNotice={validationNotice}
           />
         )}
       </div>
@@ -419,25 +346,11 @@ function PropertyScreen({
   selected,
   onSelect,
   onStart,
-  validationState,
-  expediaUrl,
-  onExpediaUrlChange,
-  onValidate,
-  isValidatingProperty,
-  validationError,
-  validationNotice,
 }: {
   properties: DemoProperty[];
   selected: DemoProperty | null;
   onSelect: (id: string) => void;
   onStart: () => void;
-  validationState: PropertyValidationState | null;
-  expediaUrl: string;
-  onExpediaUrlChange: (value: string) => void;
-  onValidate: () => void;
-  isValidatingProperty: boolean;
-  validationError: string | null;
-  validationNotice: string | null;
 }) {
   const locationLine = selected
     ? [selected.city, selected.province, selected.country].filter(Boolean).join(" · ")
@@ -455,10 +368,7 @@ function PropertyScreen({
     typeof selected?.guestRating === "number" ? selected.guestRating.toFixed(1) : "4.6";
   const starRatingLabel =
     typeof selected?.starRating === "number" ? selected.starRating.toFixed(1) : "—";
-  const reviewCountLabel =
-    validationState?.liveReviewCount || selected?.liveReviewCount
-      ? `${validationState?.liveReviewCount ?? selected?.liveReviewCount} sampled`
-      : `${selected?.reviewCount ?? 0}`;
+  const reviewCountLabel = `${selected?.reviewCount ?? 0}`;
   const amenityChips =
     selected?.popularAmenities
       ?.split(/[;,]/)
@@ -479,9 +389,6 @@ function PropertyScreen({
             ) : (
               <span>Curated</span>
             )}
-            {selected?.sourceVendor === "expedia" ? (
-              <span className="validation-pill">validated from Expedia</span>
-            ) : null}
           </div>
 
           <h1 className="property-title">
@@ -523,17 +430,6 @@ function PropertyScreen({
             Write a review
             <span className="arrow">→</span>
           </button>
-
-          <ExpediaValidationPanel
-            property={selected}
-            validationState={validationState}
-            expediaUrl={expediaUrl}
-            onExpediaUrlChange={onExpediaUrlChange}
-            onValidate={onValidate}
-            isValidatingProperty={isValidatingProperty}
-            validationError={validationError}
-            validationNotice={validationNotice}
-          />
         </div>
 
         <div className="property-visual">
@@ -617,13 +513,6 @@ function ChatScreen({
   chatBodyRef,
   textareaRef,
   error,
-  validationState,
-  expediaUrl,
-  onExpediaUrlChange,
-  onValidate,
-  isValidatingProperty,
-  validationError,
-  validationNotice,
 }: {
   selected: DemoProperty | null;
   messages: ChatMessage[];
@@ -641,20 +530,341 @@ function ChatScreen({
   chatBodyRef: React.RefObject<HTMLDivElement | null>;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   error: string | null;
-  validationState: PropertyValidationState | null;
-  expediaUrl: string;
-  onExpediaUrlChange: (value: string) => void;
-  onValidate: () => void;
-  isValidatingProperty: boolean;
-  validationError: string | null;
-  validationNotice: string | null;
 }) {
   const ratingLabel =
     typeof selected?.guestRating === "number" ? selected.guestRating.toFixed(1) : "4.6";
-  const reviewCountLabel =
-    validationState?.liveReviewCount || selected?.liveReviewCount
-      ? `${validationState?.liveReviewCount ?? selected?.liveReviewCount} sampled reviews`
-      : `${selected?.reviewCount ?? 0} reviews`;
+  const reviewCountLabel = `${selected?.reviewCount ?? 0} reviews`;
+  const realtimeSocketRef = useRef<WebSocket | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const processorNodeRef = useRef<ScriptProcessorNode | null>(null);
+  const transcriptBaseDraftRef = useRef("");
+  const transcriptOrderRef = useRef<string[]>([]);
+  const transcriptByItemIdRef = useRef(new Map<string, string>());
+  const stopRequestedRef = useRef(false);
+  const finalizeTimerRef = useRef<number | null>(null);
+  const [audioStatus, setAudioStatus] = useState<"idle" | "connecting" | "recording" | "finishing">("idle");
+  const [audioError, setAudioError] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (finalizeTimerRef.current !== null) {
+        window.clearTimeout(finalizeTimerRef.current);
+      }
+      finalizeTimerRef.current = null;
+      processorNodeRef.current?.disconnect();
+      processorNodeRef.current = null;
+      sourceNodeRef.current?.disconnect();
+      sourceNodeRef.current = null;
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+      if (audioContextRef.current) {
+        void audioContextRef.current.close().catch(() => undefined);
+      }
+      audioContextRef.current = null;
+      if (realtimeSocketRef.current) {
+        realtimeSocketRef.current.onopen = null;
+        realtimeSocketRef.current.onmessage = null;
+        realtimeSocketRef.current.onerror = null;
+        realtimeSocketRef.current.onclose = null;
+        realtimeSocketRef.current.close();
+      }
+      realtimeSocketRef.current = null;
+    };
+  }, []);
+
+  function clearFinalizeTimer() {
+    if (finalizeTimerRef.current !== null) {
+      window.clearTimeout(finalizeTimerRef.current);
+    }
+    finalizeTimerRef.current = null;
+  }
+
+  function stopAudioCapture() {
+    processorNodeRef.current?.disconnect();
+    processorNodeRef.current = null;
+    sourceNodeRef.current?.disconnect();
+    sourceNodeRef.current = null;
+
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    mediaStreamRef.current = null;
+
+    if (audioContextRef.current) {
+      void audioContextRef.current.close().catch(() => undefined);
+    }
+    audioContextRef.current = null;
+  }
+
+  function teardownRealtimeStream(nextStatus: "idle" | "connecting" | "recording" | "finishing" = "idle") {
+    clearFinalizeTimer();
+    stopAudioCapture();
+
+    const socket = realtimeSocketRef.current;
+    realtimeSocketRef.current = null;
+    if (socket) {
+      socket.onopen = null;
+      socket.onmessage = null;
+      socket.onerror = null;
+      socket.onclose = null;
+      if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN) {
+        socket.close();
+      }
+    }
+
+    stopRequestedRef.current = false;
+    setAudioStatus(nextStatus);
+  }
+
+  function refreshDraftFromTranscriptState() {
+    const transcript = transcriptOrderRef.current
+      .map((itemId) => transcriptByItemIdRef.current.get(itemId)?.trim() ?? "")
+      .filter(Boolean)
+      .join(" ");
+
+    onDraftChange(appendTranscriptToDraft(transcriptBaseDraftRef.current, transcript));
+  }
+
+  function ensureTranscriptItem(itemId: string, previousItemId?: string | null) {
+    const existingItemIds = transcriptOrderRef.current;
+    const fallbackPreviousItemId =
+      previousItemId === undefined ? (existingItemIds.at(-1) ?? null) : previousItemId;
+
+    transcriptOrderRef.current = insertOrderedItemId(
+      existingItemIds,
+      itemId,
+      fallbackPreviousItemId,
+    );
+  }
+
+  function scheduleFinalize(delayMs = 1200) {
+    clearFinalizeTimer();
+    finalizeTimerRef.current = window.setTimeout(() => {
+      teardownRealtimeStream("idle");
+      textareaRef.current?.focus();
+    }, delayMs);
+  }
+
+  async function startLiveTranscription() {
+    if (typeof window === "undefined" || typeof WebSocket === "undefined") {
+      setAudioError("Live voice transcription isn't available in this browser.");
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setAudioError("Microphone access isn't available in this browser.");
+      return;
+    }
+
+    setAudioError(null);
+    setAudioStatus("connecting");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      transcriptBaseDraftRef.current = textareaRef.current?.value ?? draft;
+      transcriptOrderRef.current = [];
+      transcriptByItemIdRef.current = new Map();
+      stopRequestedRef.current = false;
+      clearFinalizeTimer();
+
+      const response = await fetch("/api/realtime-session", {
+        method: "POST",
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { clientSecret?: string; model?: string; error?: string }
+        | null;
+
+      if (!response.ok || !payload?.clientSecret || !payload.model) {
+        throw new Error(payload?.error ?? "Couldn't start a live transcription session.");
+      }
+
+      const socket = new WebSocket(
+        `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(payload.model)}`,
+        ["realtime", `openai-insecure-api-key.${payload.clientSecret}`],
+      );
+      realtimeSocketRef.current = socket;
+
+      socket.onopen = async () => {
+        try {
+          const AudioContextCtor =
+            window.AudioContext ||
+            (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+              .webkitAudioContext;
+
+          if (!AudioContextCtor) {
+            throw new Error("This browser can't create a live audio stream.");
+          }
+
+          const audioContext = new AudioContextCtor({
+            sampleRate: REALTIME_AUDIO_SAMPLE_RATE,
+          });
+          audioContextRef.current = audioContext;
+          if (audioContext.state === "suspended") {
+            await audioContext.resume();
+          }
+
+          const sourceNode = audioContext.createMediaStreamSource(stream);
+          const processorNode = audioContext.createScriptProcessor(4096, 1, 1);
+
+          processorNode.onaudioprocess = (audioEvent) => {
+            const liveSocket = realtimeSocketRef.current;
+            if (
+              !liveSocket ||
+              liveSocket.readyState !== WebSocket.OPEN ||
+              stopRequestedRef.current
+            ) {
+              return;
+            }
+
+            const samples = audioEvent.inputBuffer.getChannelData(0);
+            const pcm = float32ToPCM16(samples, audioContext.sampleRate);
+            if (pcm.length === 0) {
+              return;
+            }
+
+            liveSocket.send(
+              JSON.stringify({
+                type: "input_audio_buffer.append",
+                audio: pcm16ToBase64(pcm),
+              }),
+            );
+          };
+
+          sourceNode.connect(processorNode);
+          processorNode.connect(audioContext.destination);
+
+          sourceNodeRef.current = sourceNode;
+          processorNodeRef.current = processorNode;
+          setAudioStatus("recording");
+        } catch (caught) {
+          setAudioError(
+            caught instanceof Error
+              ? caught.message
+              : "Couldn't start live voice transcription.",
+          );
+          teardownRealtimeStream("idle");
+        }
+      };
+
+      socket.onmessage = (messageEvent) => {
+        const payload = JSON.parse(messageEvent.data) as {
+          type?: string;
+          item_id?: string;
+          previous_item_id?: string | null;
+          delta?: string;
+          transcript?: string;
+          error?: { message?: string };
+        };
+        const itemId = payload.item_id;
+
+        if (payload.type === "input_audio_buffer.committed" && itemId) {
+          ensureTranscriptItem(itemId, payload.previous_item_id);
+          if (stopRequestedRef.current) {
+            scheduleFinalize();
+          }
+          return;
+        }
+
+        if (payload.type === "conversation.item.input_audio_transcription.delta" && itemId) {
+          ensureTranscriptItem(itemId);
+          const nextTranscript =
+            (transcriptByItemIdRef.current.get(itemId) ?? "") + (payload.delta ?? "");
+          transcriptByItemIdRef.current.set(itemId, nextTranscript);
+          refreshDraftFromTranscriptState();
+          if (stopRequestedRef.current) {
+            scheduleFinalize();
+          }
+          return;
+        }
+
+        if (payload.type === "conversation.item.input_audio_transcription.completed" && itemId) {
+          ensureTranscriptItem(itemId);
+          transcriptByItemIdRef.current.set(itemId, payload.transcript ?? "");
+          refreshDraftFromTranscriptState();
+          if (stopRequestedRef.current) {
+            scheduleFinalize();
+          }
+          return;
+        }
+
+        if (payload.type === "conversation.item.input_audio_transcription.failed") {
+          setAudioError(payload.error?.message ?? "Live transcription failed.");
+          teardownRealtimeStream("idle");
+          return;
+        }
+
+        if (payload.type === "error") {
+          setAudioError(payload.error?.message ?? "Live transcription failed.");
+          teardownRealtimeStream("idle");
+        }
+      };
+
+      socket.onerror = () => {
+        setAudioError("The live transcription connection dropped.");
+      };
+
+      socket.onclose = () => {
+        realtimeSocketRef.current = null;
+        clearFinalizeTimer();
+        stopAudioCapture();
+        stopRequestedRef.current = false;
+        setAudioStatus("idle");
+        textareaRef.current?.focus();
+      };
+    } catch (caught) {
+      teardownRealtimeStream("idle");
+      setAudioStatus("idle");
+      setAudioError(
+        caught instanceof Error
+          ? caught.message
+          : "Couldn't start live voice transcription.",
+      );
+    }
+  }
+
+  function stopLiveTranscription() {
+    const socket = realtimeSocketRef.current;
+    if (!socket || audioStatus !== "recording") {
+      return;
+    }
+
+    stopRequestedRef.current = true;
+    stopAudioCapture();
+    setAudioStatus("finishing");
+    clearFinalizeTimer();
+
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(
+        JSON.stringify({
+          type: "input_audio_buffer.commit",
+        }),
+      );
+      scheduleFinalize(1500);
+      return;
+    }
+
+    teardownRealtimeStream("idle");
+  }
+
+  async function toggleRecording() {
+    if (audioStatus === "recording") {
+      stopLiveTranscription();
+      return;
+    }
+    if (audioStatus !== "idle" || wrappedUp || isThinking) {
+      return;
+    }
+    await startLiveTranscription();
+  }
+
+  const composerBusy = audioStatus !== "idle";
+  const composerStatusText =
+    audioStatus === "connecting"
+      ? "Connecting your microphone…"
+      : audioStatus === "recording"
+        ? "Listening live… tap the mic again to stop."
+        : audioStatus === "finishing"
+          ? "Finalizing your transcript…"
+          : "Click the mic and your speech will stream into the draft live.";
 
   return (
     <div className="chat-screen">
@@ -717,6 +927,11 @@ function ChatScreen({
           <span className="chat-hint">
             {!hasDraft ? "▸ your review" : wrappedUp ? "▸ review complete" : "▸ your reply"}
           </span>
+          <div className="composer-tools">
+            <div className="composer-status">
+              {composerStatusText}
+            </div>
+          </div>
           <div className="chat-input">
             <textarea
               ref={textareaRef}
@@ -727,24 +942,35 @@ function ChatScreen({
                 wrappedUp
                   ? "Thanks — your review is complete."
                   : hasDraft
-                    ? "Type your reply…"
-                    : "Tell us about your stay — the good, the awkward, what we should know…"
+                    ? "Type or tap the mic to reply…"
+                    : "Type or tap the mic to tell us about your stay…"
               }
-              disabled={wrappedUp || isThinking}
+              disabled={wrappedUp || isThinking || composerBusy}
               rows={1}
             />
             <button
+              className={`chat-icon-button mic ${audioStatus === "recording" ? "recording" : ""}`}
+              type="button"
+              onClick={() => void toggleRecording()}
+              disabled={wrappedUp || isThinking || audioStatus === "connecting" || audioStatus === "finishing"}
+              title={audioStatus === "recording" ? "Stop live transcription" : "Start live transcription"}
+              aria-label={audioStatus === "recording" ? "Stop live transcription" : "Start live transcription"}
+            >
+              {audioStatus === "recording" ? <StopIcon /> : <MicIcon />}
+            </button>
+            <button
               className="chat-send"
               onClick={onSend}
-              disabled={!canSend}
+              disabled={!canSend || composerBusy}
               title={sendLabel}
               aria-label={sendLabel}
             >
               ↑
             </button>
           </div>
+          {audioError ? <div className="composer-note error">{audioError}</div> : null}
           <span className="chat-footer-note">
-            Press Enter to send · Shift + Enter for a new line
+            Press Enter to send · Shift + Enter for a new line · Voice streams live transcription
           </span>
         </div>
       </div>
@@ -762,22 +988,7 @@ function ChatScreen({
             <span>{ratingLabel} · {reviewCountLabel}</span>
           </div>
           <p className="summary">{selected?.propertySummary}</p>
-          {selected?.sourceVendor === "expedia" ? (
-            <div className="side-badge">validated from Expedia</div>
-          ) : null}
         </div>
-
-        <ExpediaValidationPanel
-          property={selected}
-          validationState={validationState}
-          expediaUrl={expediaUrl}
-          onExpediaUrlChange={onExpediaUrlChange}
-          onValidate={onValidate}
-          isValidatingProperty={isValidatingProperty}
-          validationError={validationError}
-          validationNotice={validationNotice}
-          compact
-        />
 
         <div className="side-kicker">What your review adds</div>
         {facts.length === 0 ? (
@@ -812,71 +1023,6 @@ function ChatScreen({
   );
 }
 
-function ExpediaValidationPanel({
-  property,
-  validationState,
-  expediaUrl,
-  onExpediaUrlChange,
-  onValidate,
-  isValidatingProperty,
-  validationError,
-  validationNotice,
-  compact = false,
-}: {
-  property: DemoProperty | null;
-  validationState: PropertyValidationState | null;
-  expediaUrl: string;
-  onExpediaUrlChange: (value: string) => void;
-  onValidate: () => void;
-  isValidatingProperty: boolean;
-  validationError: string | null;
-  validationNotice: string | null;
-  compact?: boolean;
-}) {
-  const status = isValidatingProperty
-    ? "refreshing"
-    : validationState?.validationStatus ?? property?.validationStatus ?? "idle";
-  const lastValidatedAt = validationState?.lastValidatedAt ?? property?.lastValidatedAt;
-  const reviewCount = validationState?.liveReviewCount ?? property?.liveReviewCount ?? 0;
-
-  return (
-    <div className={`validation-panel ${compact ? "compact" : ""}`}>
-      <div className="validation-topline">
-        <span className={`validation-dot ${status}`} />
-        <span>{statusLabel(status)}</span>
-        {lastValidatedAt ? (
-          <span className="validation-meta">Updated {formatRelativeTime(lastValidatedAt)}</span>
-        ) : null}
-      </div>
-      <div className="validation-copy">
-        Paste an Expedia hotel URL to refresh this seeded property card with live listing copy and visible reviews.
-      </div>
-      <div className="validation-form">
-        <input
-          value={expediaUrl}
-          onChange={(e) => onExpediaUrlChange(e.target.value)}
-          placeholder="https://www.expedia.com/..."
-          disabled={!property || isValidatingProperty}
-        />
-        <button
-          type="button"
-          onClick={onValidate}
-          disabled={!property || !expediaUrl.trim() || isValidatingProperty}
-        >
-          {isValidatingProperty ? "Validating..." : "Validate with Expedia"}
-        </button>
-      </div>
-      {reviewCount > 0 ? (
-        <div className="validation-meta">
-          {reviewCount} sampled review{reviewCount === 1 ? "" : "s"} linked to this card.
-        </div>
-      ) : null}
-      {validationNotice ? <div className="validation-note success">{validationNotice}</div> : null}
-      {validationError ? <div className="validation-note error">{validationError}</div> : null}
-    </div>
-  );
-}
-
 function formatFactValue(v: unknown): string {
   if (typeof v === "boolean") return v ? "Yes" : "No";
   if (v === null || v === undefined) return "—";
@@ -884,27 +1030,21 @@ function formatFactValue(v: unknown): string {
   return String(v);
 }
 
-function statusLabel(status: "idle" | "refreshing" | "success" | "error"): string {
-  if (status === "refreshing") return "Refreshing from Expedia";
-  if (status === "success") return "Live Expedia sync active";
-  if (status === "error") return "Last validation failed";
-  return "Seeded demo data";
+function MicIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 15a4 4 0 0 0 4-4V7a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Zm7-4a1 1 0 1 0-2 0 5 5 0 0 1-10 0 1 1 0 1 0-2 0 7 7 0 0 0 6 6.92V21H8a1 1 0 1 0 0 2h8a1 1 0 1 0 0-2h-3v-3.08A7 7 0 0 0 19 11Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
 }
 
-function formatRelativeTime(value: string): string {
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) {
-    return value;
-  }
-  const diffMs = Date.now() - parsed;
-  const diffMinutes = Math.max(1, Math.round(diffMs / 60000));
-  if (diffMinutes < 60) {
-    return `${diffMinutes}m ago`;
-  }
-  const diffHours = Math.round(diffMinutes / 60);
-  if (diffHours < 24) {
-    return `${diffHours}h ago`;
-  }
-  const diffDays = Math.round(diffHours / 24);
-  return `${diffDays}d ago`;
+function StopIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" />
+    </svg>
+  );
 }

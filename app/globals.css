@@ -5,8 +5,8 @@
   --bg-2: #f2efe5;           /* soft tint for hovers/sections */
   --bg-3: #e9e5d8;
 
-  /* Navy — Expedia primary — used as TEXT & striking dark surfaces */
-  --ink: #191e3b;            /* Expedia primary navy */
+  /* Navy — used as text and striking dark surfaces */
+  --ink: #191e3b;
   --ink-1: #0f1330;
   --ink-2: #131734;
   --ink-3: #222849;
@@ -28,14 +28,14 @@
   --line-inverse: rgba(246, 243, 234, 0.14);
   --line-inverse-strong: rgba(246, 243, 234, 0.26);
 
-  --yellow: #fddb32;          /* Expedia brand yellow */
+  --yellow: #fddb32;
   --yellow-hot: #ffe55c;
   --yellow-deep: #e8c316;
   --yellow-soft: rgba(253, 219, 50, 0.18);
   --yellow-glow: rgba(253, 219, 50, 0.55);
 
-  --blue: #1b62c0;            /* Expedia brand blue — CTAs */
-  --blue-hot: #1551a8;        /* hover */
+  --blue: #1b62c0;
+  --blue-hot: #1551a8;
   --blue-deep: #0f4d9e;
   --blue-soft: rgba(27, 98, 192, 0.16);
   --blue-glow: rgba(27, 98, 192, 0.45);
@@ -892,6 +892,19 @@ button, input, textarea { font: inherit; color: inherit; }
   width: 100%;
 }
 
+.composer-tools {
+  width: 100%;
+  max-width: 820px;
+  margin: 0 auto 12px;
+  display: block;
+}
+
+.composer-status {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--bone-dim);
+}
+
 .chat-input {
   width: 100%;
   max-width: 820px;
@@ -934,22 +947,53 @@ button, input, textarea { font: inherit; color: inherit; }
   color: var(--bone-faint);
 }
 
+.chat-icon-button,
 .chat-send {
   align-self: flex-end;
   height: 46px;
   width: 46px;
-  background: var(--blue);
-  color: #ffffff;
   border: none;
   border-radius: 50%;
   cursor: pointer;
-  font-size: 1.15rem;
-  font-weight: 700;
   display: grid;
   place-items: center;
   transition: all 200ms;
   flex-shrink: 0;
   margin: 7px;
+}
+
+.chat-icon-button {
+  background: var(--bg-2);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--line-strong) inset;
+}
+
+.chat-icon-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.chat-icon-button:hover:not(:disabled) {
+  background: var(--yellow);
+  transform: translateY(-1px);
+}
+
+.chat-icon-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.chat-icon-button.recording {
+  background: rgba(255, 122, 108, 0.12);
+  color: #c2493f;
+  box-shadow: 0 0 0 2px rgba(255, 122, 108, 0.18);
+}
+
+.chat-send {
+  background: var(--blue);
+  color: #ffffff;
+  font-size: 1.15rem;
+  font-weight: 700;
   box-shadow: 0 0 0 2px rgba(27, 98, 192, 0.3) inset;
 }
 
@@ -964,6 +1008,22 @@ button, input, textarea { font: inherit; color: inherit; }
   color: var(--bone-faint);
   cursor: not-allowed;
   box-shadow: none;
+}
+
+.composer-note {
+  width: 100%;
+  max-width: 820px;
+  margin: 12px auto 0;
+  padding: 12px 14px;
+  border-left: 2px solid transparent;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.composer-note.error {
+  border-left-color: #ff7a6c;
+  background: rgba(255, 122, 108, 0.08);
+  color: #c2493f;
 }
 
 /* hint tag above input */
@@ -1203,127 +1263,6 @@ button, input, textarea { font: inherit; color: inherit; }
   font-family: var(--font-sans);
 }
 
-.validation-pill,
-.side-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border: 1px solid rgba(255, 199, 44, 0.28);
-  background: rgba(255, 199, 44, 0.08);
-  color: var(--yellow);
-  font-size: 0.66rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.side-badge {
-  margin-top: 14px;
-}
-
-.validation-panel {
-  margin-top: 22px;
-  padding: 18px;
-  border: 1px solid var(--line);
-  background: rgba(246, 243, 234, 0.03);
-  display: grid;
-  gap: 12px;
-  max-width: 640px;
-}
-
-.validation-panel.compact {
-  margin-top: 0;
-  padding: 16px;
-}
-
-.validation-topline,
-.validation-form,
-.validation-meta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.validation-topline {
-  font-size: 0.72rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--bone-dim);
-}
-
-.validation-copy,
-.validation-meta,
-.validation-note {
-  font-size: 0.84rem;
-  line-height: 1.5;
-}
-
-.validation-meta {
-  color: var(--bone-faint);
-}
-
-.validation-form input {
-  flex: 1 1 280px;
-  min-width: 0;
-  border: 1px solid var(--line);
-  background: rgba(246, 243, 234, 0.04);
-  padding: 13px 14px;
-}
-
-.validation-form button {
-  border: none;
-  background: var(--yellow);
-  color: var(--ink);
-  padding: 13px 18px;
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.validation-form button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.validation-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 999px;
-  background: var(--bone-faint);
-}
-
-.validation-dot.refreshing {
-  background: var(--yellow);
-  box-shadow: 0 0 18px var(--yellow-glow);
-}
-
-.validation-dot.success {
-  background: #53d769;
-}
-
-.validation-dot.error {
-  background: #ff7a6c;
-}
-
-.validation-note {
-  padding: 12px 14px;
-  border-left: 2px solid transparent;
-}
-
-.validation-note.success {
-  border-left-color: #53d769;
-  background: rgba(83, 215, 105, 0.08);
-  color: #a8f3b6;
-}
-
-.validation-note.error {
-  border-left-color: #ff7a6c;
-  background: rgba(255, 122, 108, 0.08);
-  color: #ffb1a8;
-}
-
 /* ─────────── Responsive ─────────── */
 
 @media (max-width: 1080px) {
@@ -1351,6 +1290,7 @@ button, input, textarea { font: inherit; color: inherit; }
   .nav-links { gap: 18px; }
   .property-hero,
   .other-properties { padding: 32px 20px; }
+  .composer-status { width: 100%; }
   .chat-header, .chat-body, .chat-input { padding-left: 20px; padding-right: 20px; }
   .chat-input { gap: 10px; }
   .chat-hint { left: 20px; }

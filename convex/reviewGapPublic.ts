@@ -55,15 +55,6 @@ export const listDemoProperties = queryGeneric({
           reviewCount: reviewCountByPropertyId.get(sourceDoc.propertyId) ?? 0,
           demoFlags: runtimeDoc?.demoFlags ?? [],
           ...(runtimeDoc?.demoScenario ? { demoScenario: runtimeDoc.demoScenario } : {}),
-          ...(runtimeDoc?.sourceVendor ? { sourceVendor: runtimeDoc.sourceVendor } : {}),
-          ...(runtimeDoc?.sourceUrl ? { sourceUrl: runtimeDoc.sourceUrl } : {}),
-          ...(runtimeDoc?.lastValidatedAt ? { lastValidatedAt: runtimeDoc.lastValidatedAt } : {}),
-          ...(runtimeDoc?.validationStatus
-            ? { validationStatus: runtimeDoc.validationStatus }
-            : {}),
-          ...(typeof runtimeDoc?.liveReviewCount === "number"
-            ? { liveReviewCount: runtimeDoc.liveReviewCount }
-            : {}),
         };
       })
       .sort((left, right) => {
@@ -76,16 +67,6 @@ export const listDemoProperties = queryGeneric({
           String(right.city ?? right.propertyId),
         );
       });
-  },
-});
-
-export const getPropertyValidationState = queryGeneric({
-  args: {
-    propertyId: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const store = createConvexStore(ctx.db);
-    return store.getPropertyValidationState(args.propertyId);
   },
 });
 

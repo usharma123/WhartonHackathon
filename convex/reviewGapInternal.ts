@@ -19,12 +19,6 @@ export const patchProperty = internalMutationGeneric({
     createConvexStore(ctx.db).patchProperty(args.propertyId, args.patch),
 });
 
-export const getPropertyValidationState = internalQueryGeneric({
-  args: { propertyId: v.string() },
-  handler: async (ctx, args) =>
-    createConvexStore(ctx.db).getPropertyValidationState(args.propertyId),
-});
-
 export const listPropertyFacetMetrics = internalQueryGeneric({
   args: { propertyId: v.string() },
   handler: async (ctx, args) =>
