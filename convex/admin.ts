@@ -25,7 +25,7 @@ export const importFacetClassifierArtifact = mutationGeneric({
     artifact: v.any(),
   },
   handler: async (ctx, args) => {
-    const artifact = args.artifact as FacetClassifierArtifact;
+    const artifact = normalizeFacetClassifierArtifact(args.artifact);
     const existing = await ctx.db
       .query("mlRuntimeArtifacts")
       .withIndex("by_artifact_type", (q) => q.eq("artifactType", "facet_classifier"))
@@ -64,3 +64,27 @@ export const importFacetClassifierArtifact = mutationGeneric({
     };
   },
 });
+
+function normalizeFacetClassifierArtifact(raw: any): FacetClassifierArtifact {
+  if (raw?.vocabulary && typeof raw.vocabulary === "object") {
+    return raw as FacetClassifierArtifact;
+  }
+
+  const vocabularyEntries = Array.isArray(raw?.vocabularyEntries)
+    ? raw.vocabularyEntries
+    : [];
+
+  return {
+    artifactType: raw.artifactType,
+    version: raw.version,
+    generatedAt: raw.generatedAt,
+    tokenizer: raw.tokenizer,
+    runtimeFacets: raw.runtimeFacets,
+    vocabulary: Object.fromEntries(
+      vocabularyEntries.map((entry: { term: string; index: number }) => [entry.term, entry.index]),
+    ),
+    terms: raw.terms,
+    idf: raw.idf,
+    models: raw.models,
+  } satisfies FacetClassifierArtifact;
+}

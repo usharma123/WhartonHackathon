@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-
 import type { RuntimeFacet } from "./facets.js";
 
 export const CLASSIFIER_RUNTIME_FACETS = [
@@ -57,13 +55,6 @@ export interface FacetClassifierPrediction {
   likelyKnownProbabilities: Partial<Record<RuntimeFacet, number>>;
   mentionedFacets: RuntimeFacet[];
   likelyKnownFacets: RuntimeFacet[];
-}
-
-export async function loadFacetClassifierArtifact(
-  artifactPath: string,
-): Promise<FacetClassifierArtifact> {
-  const content = await readFile(artifactPath, "utf8");
-  return JSON.parse(content) as FacetClassifierArtifact;
 }
 
 export function predictFacetMentions(

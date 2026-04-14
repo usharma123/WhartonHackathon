@@ -25,12 +25,20 @@ const classifierArtifact = JSON.parse(
     "utf8",
   ),
 );
+const serializedClassifierArtifact = {
+  ...classifierArtifact,
+  vocabularyEntries: Object.entries(classifierArtifact.vocabulary).map(([term, index]) => ({
+    term,
+    index,
+  })),
+};
+delete serializedClassifierArtifact.vocabulary;
 
 const runtimeResult = await client.mutation("admin:importRuntimeBundle", {
   bundle: runtimeBundle,
 });
 const classifierResult = await client.mutation("admin:importFacetClassifierArtifact", {
-  artifact: classifierArtifact,
+  artifact: serializedClassifierArtifact,
 });
 
 console.log("Seeded runtime bundle:", runtimeResult);

@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { loadFacetClassifierArtifact, predictFacetMentions, type FacetClassifierArtifact } from "../src/backend/ml.js";
+import { predictFacetMentions, type FacetClassifierArtifact } from "../src/backend/ml.js";
+import { loadFacetClassifierArtifact } from "../src/backend/ml.node.js";
 import { createReviewSession, selectNextQuestion } from "../src/backend/service.js";
 import { InMemoryReviewGapStore } from "../src/backend/store.js";
 

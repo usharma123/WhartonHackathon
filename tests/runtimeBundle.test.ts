@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { loadRuntimeBundle, seedRuntimeBundle } from "../src/backend/runtimeBundle.js";
+import { loadRuntimeBundle } from "../src/backend/runtimeBundle.node.js";
+import { seedRuntimeBundle } from "../src/backend/runtimeBundle.js";
 import { InMemoryReviewGapStore } from "../src/backend/store.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");

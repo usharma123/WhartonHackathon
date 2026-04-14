@@ -1,14 +1,18 @@
 "use client";
 
 import { ConvexProvider, ConvexReactClient } from "convex/react";
-import { useState } from "react";
+import type { ReactNode } from "react";
 
-const defaultUrl = "http://127.0.0.1:3210";
+const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
 
-export function Providers({ children }: { children: React.ReactNode }) {
-  const [client] = useState(
-    () => new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL ?? defaultUrl),
+if (!convexUrl) {
+  throw new Error(
+    "Missing NEXT_PUBLIC_CONVEX_URL. Start Convex first with `pnpm dev` or `pnpm run dev:convex` so `.env.local` gets generated.",
   );
+}
 
-  return <ConvexProvider client={client}>{children}</ConvexProvider>;
+const convex = new ConvexReactClient(convexUrl);
+
+export function Providers({ children }: { children: ReactNode }) {
+  return <ConvexProvider client={convex}>{children}</ConvexProvider>;
 }

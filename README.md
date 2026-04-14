@@ -1,34 +1,70 @@
-# ReviewGap Backend Scaffold
+# ReviewGap Demo Engine
 
-TypeScript-first backend scaffold for the hackathon MVP:
-
-- runtime contract in TypeScript
-- Convex schema and import/query/mutation wrappers
-- offline Python artifact export
-- deterministic facet ranking with bounded AI fallback points
+Next.js + Convex demo for live review-aware follow-up questions, with deterministic ranking, persisted session state, and optional OpenAI-assisted phrasing/extraction.
 
 ## Stack
 
 - `pnpm`
-- TypeScript
-- Convex
-- OpenAI client wrapper
-- Python EDA export step
+- `Next.js 15`
+- `React 19`
+- `Convex`
+- `OpenAI`
+- Python artifact export for offline ML/runtime bundle generation
+
+## Convex Setup
+
+The app expects `NEXT_PUBLIC_CONVEX_URL` to come from Convex rather than falling back to a hardcoded localhost URL.
+
+### Local development
+
+```bash
+pnpm install
+pnpm dev
+```
+
+`pnpm dev` runs `convex dev --local` and starts `next dev` in the same flow. Convex will generate `.env.local` with `NEXT_PUBLIC_CONVEX_URL`.
+
+### Seed the local Convex database
+
+Once Convex is running and `.env.local` exists:
+
+```bash
+pnpm run seed:demo
+```
+
+This imports:
+
+- the runtime bundle from `EDA/data_artifacts/runtime/reviewgap_runtime_bundle.json`
+- the ML classifier artifact from `EDA/data_artifacts/runtime/review_classifier_artifact.json`
+
+### Optional OpenAI setup
+
+Copy `.env.local.example` to `.env.local` only if you need to wire values manually, then set:
+
+```bash
+OPENAI_API_KEY=...
+```
+
+Without `OPENAI_API_KEY`, the app still runs using the deterministic fallback path where supported.
 
 ## Repo Layout
 
-- [src/backend](/Users/utsavsharma/Documents/GitHub/hack-ai-thon-submission-dream-team/src/backend) shared runtime logic, ranking, fallbacks, store adapters
-- [convex](/Users/utsavsharma/Documents/GitHub/hack-ai-thon-submission-dream-team/convex) schema plus public backend contract wrappers
-- [EDA/scripts/export_runtime_artifacts.py](/Users/utsavsharma/Documents/GitHub/hack-ai-thon-submission-dream-team/EDA/scripts/export_runtime_artifacts.py) offline export from validated EDA artifacts
-- [EDA/data_artifacts/runtime/reviewgap_runtime_bundle.json](/Users/utsavsharma/Documents/GitHub/hack-ai-thon-submission-dream-team/EDA/data_artifacts/runtime/reviewgap_runtime_bundle.json) runtime seed bundle
-- [tests](/Users/utsavsharma/Documents/GitHub/hack-ai-thon-submission-dream-team/tests) unit and session-flow coverage
+- `app` App Router UI and Convex client provider
+- `convex` schema plus queries, mutations, and actions
+- `src/backend` shared ranking, fallback, ML, and store logic
+- `EDA/scripts` artifact export/build scripts
+- `EDA/data_artifacts/runtime` runtime seed artifacts
+- `tests` unit and session-flow coverage
 
 ## Commands
 
 ```bash
-pnpm install
-pnpm run export:runtime
+pnpm dev
+pnpm run dev:web
+pnpm run dev:convex
+pnpm run seed:demo
 pnpm run build
+pnpm run typecheck
 pnpm test
 pnpm run check
 ```
@@ -36,19 +72,8 @@ pnpm run check
 ## What’s Implemented
 
 - Convex tables for `properties`, `propertyFacetMetrics`, `propertyFacetEvidence`, `reviewSessions`, `followUpQuestions`, `followUpAnswers`, and append-only `propertyEvidenceUpdates`
+- React client integration via `ConvexProvider` and generated `api` bindings
 - deterministic ranking policy with the MVP allow-list and hard-blocked facets
-- fallback review analysis, question phrasing, and answer fact extraction
-- runtime bundle export from:
-  - `property_facet_freshness.csv`
-  - `listing_review_drift_matched.csv`
-  - `semantic_conflict_validated.csv`
-  - `semantic_thresholds.csv`
-- curated demo scenarios for:
-  - check-in friction
-  - breakfast mismatch
-  - parking shortage/conflict
-
-## Notes
-
-- The shared backend service is fully testable today.
-- The Convex wrappers currently use the deterministic fallback path inside the local scaffold. Wire a live `OpenAIReviewGapClient` into deployed Convex actions once the project is connected to a real Convex environment.
+- OpenAI-backed review analysis, question phrasing, and answer fact extraction when `OPENAI_API_KEY` is configured
+- fallback review analysis, question phrasing, and answer fact extraction when AI is unavailable
+- curated demo scenarios for check-in friction, breakfast mismatch, and parking shortage/conflict

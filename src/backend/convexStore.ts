@@ -104,7 +104,7 @@ export function createConvexStore(db: ConvexDb): ReviewGapStore {
     },
 
     async updateReviewSession(sessionId, patch) {
-      await db.patch(sessionId, patch);
+      await db.patch(sessionId, sessionPatchDoc(patch));
       const doc = await db.get(sessionId);
       if (!doc) {
         throw new Error(`Missing review session ${sessionId}`);
@@ -168,7 +168,7 @@ export function createConvexStore(db: ConvexDb): ReviewGapStore {
 }
 
 function propertyToDoc(property: PropertyRecord) {
-  return {
+  return omitNullish({
     propertyId: property.propertyId,
     city: property.city,
     province: property.province,
@@ -183,7 +183,13 @@ function propertyToDoc(property: PropertyRecord) {
     })),
     demoScenario: property.demoScenario,
     demoFlags: property.demoFlags,
-  };
+  });
+}
+
+function omitNullish<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== null && entry !== undefined),
+  ) as T;
 }
 
 function mapProperty(doc: any): PropertyRecord {
@@ -253,11 +259,25 @@ function mapSession(doc: any): StoredReviewSession {
 }
 
 function sessionDoc(session: Omit<StoredReviewSession, "id">) {
-  return {
+  return omitNullish({
     ...session,
     mlMentionProbByFacet: probabilitiesToEntries(session.mlMentionProbByFacet),
     mlLikelyKnownByFacet: probabilitiesToEntries(session.mlLikelyKnownByFacet),
-  };
+  });
+}
+
+function sessionPatchDoc(
+  patch: Partial<Omit<StoredReviewSession, "id">>,
+): Record<string, unknown> {
+  return omitNullish({
+    ...patch,
+    ...(patch.mlMentionProbByFacet
+      ? { mlMentionProbByFacet: probabilitiesToEntries(patch.mlMentionProbByFacet) }
+      : {}),
+    ...(patch.mlLikelyKnownByFacet
+      ? { mlLikelyKnownByFacet: probabilitiesToEntries(patch.mlLikelyKnownByFacet) }
+      : {}),
+  });
 }
 
 function mapQuestion(doc: any): StoredFollowUpQuestion {

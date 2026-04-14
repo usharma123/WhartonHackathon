@@ -4,8 +4,9 @@ import { readFile } from "node:fs/promises";
 import OpenAI from "openai";
 
 import { OpenAIReviewGapClient } from "../src/backend/ai.js";
-import { loadFacetClassifierArtifact } from "../src/backend/ml.js";
-import { loadRuntimeBundle, seedRuntimeBundle } from "../src/backend/runtimeBundle.js";
+import { loadFacetClassifierArtifact } from "../src/backend/ml.node.js";
+import { loadRuntimeBundle } from "../src/backend/runtimeBundle.node.js";
+import { seedRuntimeBundle } from "../src/backend/runtimeBundle.js";
 import {
   analyzeDraftReview,
   createReviewSession,

@@ -1,24 +1,26 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Sans, IBM_Plex_Serif } from "next/font/google";
+import { Archivo, Fraunces } from "next/font/google";
 
 import { Providers } from "./providers";
 import "./globals.css";
 
-const sans = IBM_Plex_Sans({
+const sans = Archivo({
   subsets: ["latin"],
   variable: "--font-sans",
   weight: ["400", "500", "600", "700"],
 });
 
-const serif = IBM_Plex_Serif({
+const display = Fraunces({
   subsets: ["latin"],
-  variable: "--font-serif",
-  weight: ["400", "500", "600", "700"],
+  variable: "--font-display",
+  weight: "variable",
+  style: ["normal", "italic"],
+  axes: ["SOFT", "WONK", "opsz"],
 });
 
 export const metadata: Metadata = {
-  title: "ReviewGap Demo Engine",
-  description: "Live review-aware follow-up question demo powered by Convex and OpenAI.",
+  title: "ReviewGap — Expedia",
+  description: "Write a review worth reading.",
 };
 
 export default function RootLayout({
@@ -28,7 +30,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${sans.variable} ${serif.variable}`}>
+      <body className={`${sans.variable} ${display.variable}`}>
         <Providers>{children}</Providers>
       </body>
     </html>

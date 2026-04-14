@@ -11,7 +11,8 @@ import {
   selectNextQuestion,
   submitFollowUpAnswer,
 } from "../src/backend/service.js";
-import { loadRuntimeBundle, seedRuntimeBundle } from "../src/backend/runtimeBundle.js";
+import { loadRuntimeBundle } from "../src/backend/runtimeBundle.node.js";
+import { seedRuntimeBundle } from "../src/backend/runtimeBundle.js";
 import { InMemoryReviewGapStore } from "../src/backend/store.js";
 import type { PropertyRecord } from "../src/backend/types.js";
 

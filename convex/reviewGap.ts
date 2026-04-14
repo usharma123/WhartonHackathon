@@ -1,18 +1,6 @@
-import OpenAI from "openai";
 import { actionGeneric, mutationGeneric, queryGeneric } from "convex/server";
 import { v } from "convex/values";
 
-import { createConvexActionStore } from "./actionStore.js";
-import { loadFacetClassifierArtifactFromConvex } from "./actionStore.js";
-import { createConvexStore } from "../src/backend/convexStore.js";
-import { OpenAIReviewGapClient } from "../src/backend/ai.js";
-import {
-  analyzeDraftReview as analyzeDraftReviewService,
-  createReviewSession as createReviewSessionService,
-  getSessionSummary as getSessionSummaryService,
-  selectNextQuestion as selectNextQuestionService,
-  submitFollowUpAnswer as submitFollowUpAnswerService,
-} from "../src/backend/service.js";
 import type { RuntimeFacet } from "../src/backend/facets.js";
 
 export const listDemoProperties = queryGeneric({
@@ -24,12 +12,12 @@ export const listDemoProperties = queryGeneric({
       .sort((left, right) => String(left.demoScenario ?? "").localeCompare(String(right.demoScenario ?? "")))
       .map((doc) => ({
         propertyId: doc.propertyId,
-        city: doc.city ?? undefined,
-        province: doc.province ?? undefined,
-        country: doc.country ?? undefined,
+        ...(doc.city ? { city: doc.city } : {}),
+        ...(doc.province ? { province: doc.province } : {}),
+        ...(doc.country ? { country: doc.country } : {}),
         propertySummary: doc.propertySummary,
         demoFlags: doc.demoFlags ?? [],
-        demoScenario: doc.demoScenario ?? undefined,
+        ...(doc.demoScenario ? { demoScenario: doc.demoScenario } : {}),
       }));
   },
 });
@@ -40,6 +28,11 @@ export const createReviewSession = mutationGeneric({
     draftReview: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const [{ createConvexStore }, { createReviewSession: createReviewSessionService }] =
+      await Promise.all([
+        import("../src/backend/convexStore.js"),
+        import("../src/backend/service.js"),
+      ]);
     const store = createConvexStore(ctx.db);
     return createReviewSessionService(store, args);
   },
@@ -51,9 +44,16 @@ export const analyzeDraftReview = actionGeneric({
     draftReview: v.string(),
   },
   handler: async (ctx, args) => {
+    const [
+      { createConvexActionStore, loadFacetClassifierArtifactFromConvex },
+      { analyzeDraftReview: analyzeDraftReviewService },
+    ] = await Promise.all([
+      import("./actionStore.js"),
+      import("../src/backend/service.js"),
+    ]);
     const store = createConvexActionStore(ctx);
     const classifierArtifact = await loadFacetClassifierArtifactFromConvex(ctx);
-    return analyzeDraftReviewService(store, makeAIClient(), args, classifierArtifact);
+    return analyzeDraftReviewService(store, await makeAIClient(), args, classifierArtifact);
   },
 });
 
@@ -64,9 +64,16 @@ export const selectNextQuestion = actionGeneric({
     includeSecondaryFacets: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    const [
+      { createConvexActionStore, loadFacetClassifierArtifactFromConvex },
+      { selectNextQuestion: selectNextQuestionService },
+    ] = await Promise.all([
+      import("./actionStore.js"),
+      import("../src/backend/service.js"),
+    ]);
     const store = createConvexActionStore(ctx);
     const classifierArtifact = await loadFacetClassifierArtifactFromConvex(ctx);
-    return selectNextQuestionService(store, makeAIClient(), args, classifierArtifact);
+    return selectNextQuestionService(store, await makeAIClient(), args, classifierArtifact);
   },
 });
 
@@ -77,8 +84,15 @@ export const submitFollowUpAnswer = actionGeneric({
     answerText: v.string(),
   },
   handler: async (ctx, args) => {
+    const [
+      { createConvexActionStore },
+      { submitFollowUpAnswer: submitFollowUpAnswerService },
+    ] = await Promise.all([
+      import("./actionStore.js"),
+      import("../src/backend/service.js"),
+    ]);
     const store = createConvexActionStore(ctx);
-    return submitFollowUpAnswerService(store, makeAIClient(), {
+    return submitFollowUpAnswerService(store, await makeAIClient(), {
       sessionId: args.sessionId,
       facet: args.facet as RuntimeFacet,
       answerText: args.answerText,
@@ -91,15 +105,24 @@ export const getSessionSummary = queryGeneric({
     sessionId: v.string(),
   },
   handler: async (ctx, args) => {
+    const [{ createConvexStore }, { getSessionSummary: getSessionSummaryService }] =
+      await Promise.all([
+        import("../src/backend/convexStore.js"),
+        import("../src/backend/service.js"),
+      ]);
     const store = createConvexStore(ctx.db);
     return getSessionSummaryService(store, args.sessionId);
   },
 });
 
-function makeAIClient() {
+async function makeAIClient() {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return undefined;
   }
+  const [{ default: OpenAI }, { OpenAIReviewGapClient }] = await Promise.all([
+    import("openai"),
+    import("../src/backend/ai.js"),
+  ]);
   return new OpenAIReviewGapClient(new OpenAI({ apiKey }));
 }

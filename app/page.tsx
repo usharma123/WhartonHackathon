@@ -1,7 +1,7 @@
 "use client";
 
 import { useAction, useMutation, useQuery } from "convex/react";
-import { startTransition, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "../convex/_generated/api";
 
@@ -15,23 +15,49 @@ type DemoProperty = {
   demoScenario?: string;
 };
 
-export default function HomePage() {
-  const properties = useQuery(api.reviewGap.listDemoProperties, {}) as DemoProperty[] | undefined;
-  const createReviewSession = useMutation(api.reviewGap.createReviewSession);
-  const analyzeDraftReview = useAction(api.reviewGap.analyzeDraftReview);
-  const selectNextQuestion = useAction(api.reviewGap.selectNextQuestion);
-  const submitFollowUpAnswer = useAction(api.reviewGap.submitFollowUpAnswer);
+type ChatMessage =
+  | { id: string; role: "ai"; label?: string; text: string; kind?: "question" | "intro" | "wrapup" }
+  | { id: string; role: "user"; text: string };
 
+type Fact = { factType: string; value: unknown };
+
+type View = "property" | "chat";
+
+const PROMPT_STARTER =
+  "Tell us how your stay went — the good, the awkward, what we should know.";
+
+export default function HomePage() {
+  const properties = useQuery(api.reviewGapPublic.listDemoProperties, {}) as DemoProperty[] | undefined;
+  const createReviewSession = useMutation(api.reviewGapPublic.createReviewSession);
+  const analyzeDraftReview = useAction(api.reviewGapActions.analyzeDraftReview);
+  const selectNextQuestion = useAction(api.reviewGapActions.selectNextQuestion);
+  const submitFollowUpAnswer = useAction(api.reviewGapActions.submitFollowUpAnswer);
+
+  const [view, setView] = useState<View>("property");
   const [propertyId, setPropertyId] = useState<string>("");
-  const [draftReview, setDraftReview] = useState("");
+
+  // chat state
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [analysis, setAnalysis] = useState<any>(null);
-  const [question, setQuestion] = useState<any>(null);
-  const [answerText, setAnswerText] = useState("");
-  const [answerResult, setAnswerResult] = useState<any>(null);
-  const [isRunning, setIsRunning] = useState(false);
-  const [isAnswering, setIsAnswering] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [draft, setDraft] = useState("");
+  const [isThinking, setIsThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingFacet, setPendingFacet] = useState<string | null>(null);
+  const [facts, setFacts] = useState<Fact[]>([]);
+  const [wrappedUp, setWrappedUp] = useState(false);
+  const [hasDraft, setHasDraft] = useState(false);
+  const [followUpCount, setFollowUpCount] = useState(0);
+  const [askedFacets, setAskedFacets] = useState<string[]>([]);
+
+  const chatBodyRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = Math.min(ta.scrollHeight, 220) + "px";
+  }, [draft, view]);
 
   useEffect(() => {
     if (!propertyId && properties && properties.length > 0) {
@@ -39,360 +65,601 @@ export default function HomePage() {
     }
   }, [properties, propertyId]);
 
-  const sessionSummary = useQuery(
-    api.reviewGap.getSessionSummary,
-    sessionId ? { sessionId } : "skip",
-  );
+  useEffect(() => {
+    if (chatBodyRef.current) {
+      chatBodyRef.current.scrollTo({
+        top: chatBodyRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  }, [messages.length, isThinking]);
 
   const selectedProperty = useMemo(
-    () => properties?.find((property: DemoProperty) => property.propertyId === propertyId) ?? null,
+    () => properties?.find((p) => p.propertyId === propertyId) ?? null,
     [properties, propertyId],
   );
 
-  async function handleAnalyzeAndAsk() {
-    if (!propertyId || !draftReview.trim()) {
-      setError("Choose a demo property and write a review draft first.");
+  const otherProperties = useMemo(
+    () => (properties ?? []).filter((p) => p.propertyId !== propertyId),
+    [properties, propertyId],
+  );
+
+  const uid = () => Math.random().toString(36).slice(2, 10);
+
+  function startReview() {
+    if (!selectedProperty) return;
+    setView("chat");
+    setSessionId(null);
+    setDraft("");
+    setPendingFacet(null);
+    setFacts([]);
+    setWrappedUp(false);
+    setHasDraft(false);
+    setFollowUpCount(0);
+    setAskedFacets([]);
+    setError(null);
+    setMessages([
+      {
+        id: uid(),
+        role: "ai",
+        kind: "intro",
+        text: `Hi — I'm helping capture your stay at ${selectedProperty.city ?? "the property"}. ${PROMPT_STARTER}`,
+      },
+    ]);
+  }
+
+  function backToProperty() {
+    setView("property");
+  }
+
+  async function sendUserMessage() {
+    const trimmed = draft.trim();
+    if (!trimmed || isThinking) return;
+
+    // First message = draft review → analyze + ask first follow-up
+    if (!hasDraft) {
+      setMessages((prev) => [...prev, { id: uid(), role: "user", text: trimmed }]);
+      setDraft("");
+      setHasDraft(true);
+      await runInitialAnalysis(trimmed);
       return;
     }
-    setIsRunning(true);
-    setError(null);
-    try {
-      const createdSession =
-        sessionId && selectedProperty?.propertyId === propertyId
-          ? { sessionId }
-          : await createReviewSession({ propertyId, draftReview });
-      const nextSessionId = createdSession.sessionId;
-      startTransition(() => {
-        setSessionId(nextSessionId);
-        setAnswerResult(null);
-      });
-      const nextAnalysis = await analyzeDraftReview({
-        sessionId: nextSessionId,
-        draftReview,
-      });
-      const nextQuestion = await selectNextQuestion({
-        sessionId: nextSessionId,
-        draftReview,
-      });
-      startTransition(() => {
-        setAnalysis(nextAnalysis);
-        setQuestion(nextQuestion);
-      });
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to analyze the draft review.");
-    } finally {
-      setIsRunning(false);
+
+    // Subsequent messages = answer to the pending follow-up
+    if (pendingFacet) {
+      setMessages((prev) => [...prev, { id: uid(), role: "user", text: trimmed }]);
+      setDraft("");
+      await submitAnswer(trimmed);
     }
   }
 
-  async function handleAnswerSubmit() {
-    if (!sessionId || !question?.facet || !answerText.trim()) {
-      setError("Ask a question first, then enter an answer.");
-      return;
+  async function runInitialAnalysis(draftReview: string) {
+    if (!propertyId) return;
+    setIsThinking(true);
+    setError(null);
+    try {
+      const session = await createReviewSession({ propertyId, draftReview });
+      setSessionId(session.sessionId);
+      await analyzeDraftReview({ sessionId: session.sessionId, draftReview });
+      const q = await selectNextQuestion({ sessionId: session.sessionId, draftReview });
+
+      if (q?.noFollowUp) {
+        setWrappedUp(true);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: uid(),
+            role: "ai",
+            kind: "wrapup",
+            text:
+              q.whyThisQuestion ??
+              "That's a complete review — thanks. Future travelers will find this helpful.",
+          },
+        ]);
+      } else if (q?.facet && q?.questionText) {
+        const facet: string = q.facet;
+        const text: string = q.questionText;
+        setPendingFacet(facet);
+        setFollowUpCount((n) => n + 1);
+        setAskedFacets((prev) => [...prev, facet]);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: uid(),
+            role: "ai",
+            kind: "question",
+            label: `One quick thing · ${facet.replaceAll("_", " ")}`,
+            text,
+          },
+        ]);
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Something went wrong.");
+    } finally {
+      setIsThinking(false);
     }
-    setIsAnswering(true);
+  }
+
+  async function submitAnswer(answerText: string) {
+    if (!sessionId || !pendingFacet) return;
+    setIsThinking(true);
     setError(null);
     try {
       const result = await submitFollowUpAnswer({
         sessionId,
-        facet: question.facet,
+        facet: pendingFacet,
         answerText,
       });
-      startTransition(() => {
-        setAnswerResult(result);
-      });
+      if (result?.structuredFacts?.length) {
+        setFacts((prev) => [...prev, ...result.structuredFacts]);
+      }
+
+      const summary = result?.propertyCardDelta?.summary;
+      if (summary) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: uid(),
+            role: "ai",
+            label: "Added to the listing",
+            text: summary,
+          },
+        ]);
+      }
+
+      // Decide whether to keep going (up to ~3 follow-ups) or wrap.
+      const keepGoing = followUpCount < 3;
+      if (keepGoing && sessionId) {
+        try {
+          const draftReview = [...messages, { id: uid(), role: "user" as const, text: answerText }]
+            .filter((m) => m.role === "user")
+            .map((m) => m.text)
+            .join(" ");
+          const next = await selectNextQuestion({ sessionId, draftReview });
+          if (
+            next?.facet &&
+            next?.questionText &&
+            !next.noFollowUp &&
+            next.facet !== pendingFacet &&
+            !askedFacets.includes(next.facet)
+          ) {
+            const facet: string = next.facet;
+            const text: string = next.questionText;
+            setPendingFacet(facet);
+            setFollowUpCount((n) => n + 1);
+            setAskedFacets((prev) => [...prev, facet]);
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: uid(),
+                role: "ai",
+                kind: "question",
+                label: `Follow-up · ${facet.replaceAll("_", " ")}`,
+                text,
+              },
+            ]);
+            return;
+          }
+        } catch {
+          // fall through to wrap-up
+        }
+      }
+
+      setPendingFacet(null);
+      setWrappedUp(true);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: uid(),
+          role: "ai",
+          kind: "wrapup",
+          text:
+            "That's a wrap — your review's ready to post. Thanks for the detail; it helps the next traveler.",
+        },
+      ]);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Failed to submit the follow-up answer.");
+      setError(caught instanceof Error ? caught.message : "Couldn't save your answer.");
     } finally {
-      setIsAnswering(false);
+      setIsThinking(false);
     }
   }
 
+  function onTextareaKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      void sendUserMessage();
+    }
+  }
+
+  const canSend = draft.trim().length > 0 && !isThinking && !wrappedUp;
+  const sendLabel = !hasDraft ? "send review" : pendingFacet ? "reply" : "send";
+
   return (
-    <main className="page-shell">
-      <section className="hero">
-        <div>
-          <p className="eyebrow">ReviewGap Demo Engine</p>
-          <h1>Live review-aware follow-up questions, with deterministic ranking and ML-assisted review understanding.</h1>
-          <p className="lede">
-            Pick a seeded property, write a live review, let the engine analyze what you already covered,
-            then inspect the exact evidence and score that drove the follow-up.
+    <>
+      <nav className="nav">
+        <div className="nav-brand">
+          <span className="mark">E</span>
+          <div>
+            <div>Expedia</div>
+            <div className="brand-sub">ReviewGap</div>
+          </div>
+        </div>
+        <div className="nav-links">
+          <button
+            className={view === "property" ? "active" : ""}
+            onClick={() => setView("property")}
+          >
+            Stay
+          </button>
+          <button
+            className={view === "chat" ? "active" : ""}
+            onClick={() => selectedProperty && setView("chat")}
+          >
+            Review
+          </button>
+        </div>
+      </nav>
+
+      <div className="page">
+        {view === "property" ? (
+          <PropertyScreen
+            properties={properties ?? []}
+            selected={selectedProperty}
+            otherProperties={otherProperties}
+            onSelect={setPropertyId}
+            onStart={startReview}
+          />
+        ) : (
+          <ChatScreen
+            selected={selectedProperty}
+            messages={messages}
+            isThinking={isThinking}
+            draft={draft}
+            onDraftChange={setDraft}
+            onSend={sendUserMessage}
+            onBack={backToProperty}
+            onKey={onTextareaKey}
+            canSend={canSend}
+            sendLabel={sendLabel}
+            facts={facts}
+            wrappedUp={wrappedUp}
+            hasDraft={hasDraft}
+            chatBodyRef={chatBodyRef}
+            textareaRef={textareaRef}
+            error={error}
+          />
+        )}
+      </div>
+    </>
+  );
+}
+
+/* ────────────────────────── Property screen ────────────────────────── */
+
+function PropertyScreen({
+  properties,
+  selected,
+  otherProperties,
+  onSelect,
+  onStart,
+}: {
+  properties: DemoProperty[];
+  selected: DemoProperty | null;
+  otherProperties: DemoProperty[];
+  onSelect: (id: string) => void;
+  onStart: () => void;
+}) {
+  const locationLine = selected
+    ? [selected.city, selected.province, selected.country].filter(Boolean).join(" · ")
+    : "—";
+
+  const splitName = (city: string | undefined): [string, string] => {
+    if (!city) return ["The", "Stay"];
+    const parts = city.split(" ");
+    if (parts.length === 1) return [parts[0], ""];
+    return [parts.slice(0, -1).join(" "), parts[parts.length - 1]];
+  };
+
+  const [first, last] = splitName(selected?.city);
+
+  return (
+    <>
+      <section className="property-hero">
+        <div className="property-left">
+          <div className="property-meta">
+            <span>Featured stay</span>
+            <span className="divider" />
+            {selected?.demoScenario ? (
+              <span className="scenario">{selected.demoScenario.replaceAll("_", " ")}</span>
+            ) : (
+              <span>Curated</span>
+            )}
+          </div>
+
+          <h1 className="property-title">
+            {first} {last ? <em>{last}</em> : null}
+          </h1>
+
+          <p className="property-location">
+            {locationLine.split(" · ").map((part, idx, arr) => (
+              <span key={`${part}-${idx}`}>
+                {part}
+                {idx < arr.length - 1 ? <span className="dot" /> : null}
+              </span>
+            ))}
           </p>
+
+          <p className="property-description">
+            {selected?.propertySummary ??
+              "Select a stay to see its story. Each property tells travelers a different truth — ours is built from real reviews, refined by the people who stayed there."}
+          </p>
+
+          <div className="property-stats">
+            <div className="property-stat">
+              <span className="k">Rating</span>
+              <span className="v">
+                <span className="star">★</span>4.6
+              </span>
+            </div>
+            <div className="property-stat">
+              <span className="k">Reviews</span>
+              <span className="v">1,284</span>
+            </div>
+            <div className="property-stat">
+              <span className="k">From</span>
+              <span className="v">$248<span style={{ fontSize: "0.8rem", color: "var(--bone-faint)", marginLeft: 4 }}>/ night</span></span>
+            </div>
+          </div>
+
+          <button className="cta-primary" onClick={onStart} disabled={!selected}>
+            Write a review
+            <span className="arrow">→</span>
+          </button>
         </div>
-        <div className="hero-card">
-          <span>Runtime stack</span>
-          <strong>Next.js + Convex + OpenAI</strong>
-          <span>Offline ML</span>
-          <strong>Exported TF-IDF logistic classifier</strong>
+
+        <div className="property-visual">
+          <div className="visual-frame">
+            <span className="frame-tag">Live from travelers</span>
+            <span className="frame-quote-mark">&ldquo;</span>
+            <div className="frame-mono">
+              {selected?.city ? (
+                <>
+                  A stay in <span>{selected.city}</span> is only as honest as the last reviewer&rsquo;s memory.
+                </>
+              ) : (
+                <>A good review is a <span>gift</span> to the next traveler.</>
+              )}
+            </div>
+          </div>
+          <div className="amenities">
+            {(selected?.demoFlags ?? ["wifi", "breakfast", "gym", "pool", "pet friendly"]).slice(0, 6).map((flag) => (
+              <span className="amenity-chip" key={flag}>
+                {flag.replaceAll("_", " ")}
+              </span>
+            ))}
+          </div>
         </div>
       </section>
 
-      <section className="grid">
-        <div className="panel review-panel">
-          <div className="panel-header">
-            <div>
-              <p className="panel-kicker">1. Draft Review</p>
-              <h2>Write the review you want to test</h2>
-            </div>
+      {properties.length > 0 ? (
+        <section className="other-properties">
+          <div className="section-title">
+            <h2>
+              Or choose <em>another</em> stay
+            </h2>
+            <span className="caption">{properties.length} curated</span>
           </div>
 
-          <label className="field">
-            <span>Curated demo property</span>
-            <select value={propertyId} onChange={(event) => setPropertyId(event.target.value)}>
-              <option value="">Select a seeded scenario</option>
-              {properties?.map((property: DemoProperty) => (
-                <option key={property.propertyId} value={property.propertyId}>
-                  {property.demoScenario?.replaceAll("_", " ")} · {property.city}, {property.country}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="property-blurb">
-            <p className="property-title">
-              {selectedProperty?.city ? `${selectedProperty.city}, ${selectedProperty.country}` : "No property selected"}
-            </p>
-            <p>{selectedProperty?.propertySummary ?? "Seed the demo data and select a property to begin."}</p>
-          </div>
-
-          <label className="field">
-            <span>Review draft</span>
-            <textarea
-              value={draftReview}
-              onChange={(event) => setDraftReview(event.target.value)}
-              rows={9}
-              placeholder="Example: Check-in took forever, but the room was clean and quiet."
-            />
-          </label>
-
-          <div className="actions">
-            <button className="primary-button" onClick={handleAnalyzeAndAsk} disabled={isRunning}>
-              {isRunning ? "Analyzing..." : "Analyze + Ask"}
-            </button>
-            <span className="status-copy">
-              {sessionId ? `Session ${sessionId}` : "No live session created yet"}
-            </span>
-          </div>
-
-          {error ? <p className="error-banner">{error}</p> : null}
-        </div>
-
-        <div className="stack">
-          <div className="panel">
-            <div className="panel-header">
-              <div>
-                <p className="panel-kicker">2. Review Understanding</p>
-                <h2>What the engine thinks you already covered</h2>
-              </div>
-            </div>
-
-            <div className="chip-row">
-              {(analysis?.mentionedFacets ?? []).map((facet: string) => (
-                <span className="chip" key={facet}>
-                  {facet.replaceAll("_", " ")}
-                </span>
-              ))}
-              {analysis?.mentionedFacets?.length === 0 ? <span className="muted">No facets detected yet.</span> : null}
-            </div>
-
-            <div className="stats-grid">
-              <Stat label="Sentiment" value={analysis?.sentiment ?? "n/a"} />
-              <Stat label="Used ML" value={analysis?.usedML ? "yes" : "no"} />
-              <Stat label="Used OpenAI" value={analysis?.usedOpenAI ? "yes" : "no"} />
-              <Stat label="Used fallback" value={analysis?.usedFallback ? "yes" : "no"} />
-            </div>
-
-            <ProbabilityList
-              title="ML mention probabilities"
-              values={analysis?.mlMentionProbByFacet}
-            />
-          </div>
-
-          <div className="panel">
-            <div className="panel-header">
-              <div>
-                <p className="panel-kicker">3. Follow-up</p>
-                <h2>The next question chosen by the ranker</h2>
-              </div>
-            </div>
-
-            {question?.noFollowUp ? (
-              <p className="muted">{question.whyThisQuestion}</p>
-            ) : (
-              <>
-                <p className="facet-badge">{question?.facet?.replaceAll("_", " ") ?? "No facet selected"}</p>
-                <p className="question-copy">{question?.questionText ?? "No question yet."}</p>
-                <p className="voice-copy">Voice: {question?.voiceText ?? "n/a"}</p>
-                <div className="why-box">
-                  <h3>Why asked</h3>
-                  <p>{question?.whyThisQuestion ?? "No deterministic explanation yet."}</p>
+          <div className="property-row">
+            {properties.map((p) => (
+              <button
+                key={p.propertyId}
+                className={`property-tile ${p.propertyId === selected?.propertyId ? "active" : ""}`}
+                onClick={() => onSelect(p.propertyId)}
+                type="button"
+              >
+                <div className="tile-head">
+                  <span>{p.country ?? "—"}</span>
+                  {p.demoScenario ? (
+                    <span className="scenario">{p.demoScenario.replaceAll("_", " ")}</span>
+                  ) : null}
                 </div>
-                <ScoreBreakdown scoreBreakdown={question?.scoreBreakdown} />
-                <EvidenceList evidence={question?.supportingEvidence} />
-                <div className="source-line">
-                  <span>Question source</span>
-                  <strong>
-                    {question?.questionSource?.usedOpenAI
-                      ? "OpenAI phrasing"
-                      : question?.questionSource?.usedFallback
-                        ? "Deterministic template"
-                        : "n/a"}
-                  </strong>
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="panel">
-            <div className="panel-header">
-              <div>
-                <p className="panel-kicker">4. Answer Capture</p>
-                <h2>Submit the follow-up answer</h2>
-              </div>
-            </div>
-
-            <label className="field">
-              <span>Answer text</span>
-              <textarea
-                value={answerText}
-                onChange={(event) => setAnswerText(event.target.value)}
-                rows={5}
-                placeholder="Example: Parking was tight and we had to pay $18 for a small lot."
-              />
-            </label>
-
-            <div className="actions">
-              <button className="primary-button" onClick={handleAnswerSubmit} disabled={isAnswering}>
-                {isAnswering ? "Saving..." : "Submit Answer"}
+                <h3 className="tile-name">{p.city ?? "Property"}</h3>
+                <p className="tile-loc">
+                  {[p.province, p.country].filter(Boolean).join(" · ")}
+                </p>
+                <p className="tile-summary">{p.propertySummary}</p>
+                <span className="tile-arrow">View stay</span>
               </button>
-            </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </>
+  );
+}
 
-            {answerResult ? (
-              <div className="answer-card">
-                <p>{answerResult.propertyCardDelta.summary}</p>
-                <div className="chip-row">
-                  {answerResult.structuredFacts.map((fact: any, index: number) => (
-                    <span className="chip" key={`${fact.factType}-${index}`}>
-                      {fact.factType}: {String(fact.value)}
-                    </span>
-                  ))}
-                </div>
-                <div className="source-line">
-                  <span>Answer extraction</span>
-                  <strong>{answerResult.usedOpenAI ? "OpenAI" : "Fallback"}</strong>
+/* ────────────────────────── Chat screen ────────────────────────── */
+
+function ChatScreen({
+  selected,
+  messages,
+  isThinking,
+  draft,
+  onDraftChange,
+  onSend,
+  onBack,
+  onKey,
+  canSend,
+  sendLabel,
+  facts,
+  wrappedUp,
+  hasDraft,
+  chatBodyRef,
+  textareaRef,
+  error,
+}: {
+  selected: DemoProperty | null;
+  messages: ChatMessage[];
+  isThinking: boolean;
+  draft: string;
+  onDraftChange: (v: string) => void;
+  onSend: () => void;
+  onBack: () => void;
+  onKey: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  canSend: boolean;
+  sendLabel: string;
+  facts: Fact[];
+  wrappedUp: boolean;
+  hasDraft: boolean;
+  chatBodyRef: React.RefObject<HTMLDivElement | null>;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  error: string | null;
+}) {
+  return (
+    <div className="chat-screen">
+      {/* Main conversation */}
+      <div className="chat-main">
+        <div className="chat-header">
+          <button className="chat-back" onClick={onBack}>
+            ← back to stay
+          </button>
+          <div className="chat-header-title">
+            Reviewing <em>{selected?.city ?? "your stay"}</em>
+          </div>
+          <div className="chat-header-status">
+            <span className="dot" />
+            {isThinking ? "thinking" : wrappedUp ? "complete" : "listening"}
+          </div>
+        </div>
+
+        <div className="chat-body" ref={chatBodyRef}>
+          {messages.map((m) =>
+            m.role === "ai" ? (
+              <div className="msg ai" key={m.id}>
+                <div className="msg-avatar">R</div>
+                <div className="msg-bubble">
+                  {m.label ? <span className="label">{m.label}</span> : null}
+                  {m.kind === "question" ? (
+                    <div className="question">
+                      {m.text}
+                    </div>
+                  ) : (
+                    <div>{m.text}</div>
+                  )}
                 </div>
               </div>
             ) : (
-              <p className="muted">No answer submitted yet.</p>
-            )}
-          </div>
+              <div className="msg user" key={m.id}>
+                <div className="msg-avatar">You</div>
+                <div className="msg-bubble">{m.text}</div>
+              </div>
+            ),
+          )}
 
-          <div className="panel">
-            <div className="panel-header">
-              <div>
-                <p className="panel-kicker">5. Session Summary</p>
-                <h2>Persisted evidence captured by the backend</h2>
+          {isThinking ? (
+            <div className="msg ai">
+              <div className="msg-avatar">R</div>
+              <div className="msg-bubble">
+                <div className="typing">
+                  <span />
+                  <span />
+                  <span />
+                </div>
               </div>
             </div>
+          ) : null}
 
-            <pre className="summary-block">
-              {JSON.stringify(sessionSummary ?? { status: "No persisted session yet." }, null, 2)}
-            </pre>
+          {error ? <div className="error-toast">{error}</div> : null}
+        </div>
+
+        <div className="chat-input-bar">
+          <span className="chat-hint">
+            {!hasDraft ? "▸ your review" : wrappedUp ? "▸ review complete" : "▸ your reply"}
+          </span>
+          <div className="chat-input">
+            <textarea
+              ref={textareaRef}
+              value={draft}
+              onChange={(e) => onDraftChange(e.target.value)}
+              onKeyDown={onKey}
+              placeholder={
+                wrappedUp
+                  ? "Thanks — your review is complete."
+                  : hasDraft
+                    ? "Type your reply…"
+                    : "Tell us about your stay — the good, the awkward, what we should know…"
+              }
+              disabled={wrappedUp || isThinking}
+              rows={1}
+            />
+            <button
+              className="chat-send"
+              onClick={onSend}
+              disabled={!canSend}
+              title={sendLabel}
+              aria-label={sendLabel}
+            >
+              ↑
+            </button>
           </div>
+          <span className="chat-footer-note">
+            Press Enter to send · Shift + Enter for a new line
+          </span>
         </div>
-      </section>
-    </main>
-  );
-}
+      </div>
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="stat-card">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function ProbabilityList({
-  title,
-  values,
-}: {
-  title: string;
-  values: Record<string, number> | undefined;
-}) {
-  const entries = Object.entries(values ?? {}).sort((left, right) => right[1] - left[1]);
-  return (
-    <div className="probability-list">
-      <h3>{title}</h3>
-      {entries.length === 0 ? (
-        <p className="muted">No ML probabilities available yet.</p>
-      ) : (
-        entries.map(([facet, value]) => (
-          <div key={facet} className="probability-row">
-            <span>{facet.replaceAll("_", " ")}</span>
-            <strong>{value.toFixed(3)}</strong>
+      {/* Sidebar: live property card + updates */}
+      <aside className="chat-side">
+        <div className="side-kicker">The listing</div>
+        <div className="side-property-card">
+          <div className="loc">
+            {[selected?.city, selected?.country].filter(Boolean).join(" · ") || "—"}
           </div>
-        ))
-      )}
+          <h3>{selected?.city ?? "Your stay"}</h3>
+          <div className="rating">
+            <span className="stars">★★★★★</span>
+            <span>4.6 · 1,284 reviews</span>
+          </div>
+          <p className="summary">{selected?.propertySummary}</p>
+        </div>
+
+        <div className="side-kicker">What your review adds</div>
+        {facts.length === 0 ? (
+          <div className="empty-side">
+            As you answer, new details you share will update this listing for future travelers.
+          </div>
+        ) : (
+          <div>
+            <div className="updates-title">
+              <h4>Live updates</h4>
+              <span className="count">
+                {facts.length} fact{facts.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            {facts.map((fact, i) => (
+              <div className="update-item" key={`${fact.factType}-${i}`}>
+                <div className="u-label">{fact.factType?.replaceAll("_", " ")}</div>
+                <div className="u-value">{formatFactValue(fact.value)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {wrappedUp ? (
+          <div className="finish-banner">
+            Thank you
+            <span className="big">Your review is ready to post.</span>
+          </div>
+        ) : null}
+      </aside>
     </div>
   );
 }
 
-function ScoreBreakdown({
-  scoreBreakdown,
-}: {
-  scoreBreakdown:
-    | {
-        importance: number;
-        staleness: number;
-        conflict: number;
-        coverageGap: number;
-        matchedSupportGap: number;
-        alreadyMentionedPenalty: number;
-        reviewerKnowsBoost: number;
-        total: number;
-      }
-    | null
-    | undefined;
-}) {
-  if (!scoreBreakdown) {
-    return null;
-  }
-  const entries = Object.entries(scoreBreakdown);
-  return (
-    <div className="score-grid">
-      {entries.map(([key, value]) => (
-        <div key={key} className="score-card">
-          <span>{key}</span>
-          <strong>{Number(value).toFixed(3)}</strong>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function EvidenceList({
-  evidence,
-}: {
-  evidence:
-    | Array<{ sourceType: string; snippet: string; acquisitionDate?: string }>
-    | null
-    | undefined;
-}) {
-  if (!evidence || evidence.length === 0) {
-    return <p className="muted">No supporting evidence attached.</p>;
-  }
-  return (
-    <div className="evidence-list">
-      <h3>Supporting evidence</h3>
-      {evidence.map((item, index) => (
-        <div className="evidence-item" key={`${item.sourceType}-${index}`}>
-          <span>{item.sourceType.replaceAll("_", " ")}</span>
-          <p>{item.snippet}</p>
-          {item.acquisitionDate ? <small>{item.acquisitionDate}</small> : null}
-        </div>
-      ))}
-    </div>
-  );
+function formatFactValue(v: unknown): string {
+  if (typeof v === "boolean") return v ? "Yes" : "No";
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "number") return String(v);
+  return String(v);
 }

@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-
 import type {
   EligibleFacetSummary,
   PropertyFacetEvidence,
@@ -14,11 +12,6 @@ export interface RuntimeBundle {
   properties: PropertyRecord[];
   propertyFacetMetrics: PropertyFacetMetric[];
   propertyFacetEvidence: PropertyFacetEvidence[];
-}
-
-export async function loadRuntimeBundle(bundlePath: string): Promise<RuntimeBundle> {
-  const content = await readFile(bundlePath, "utf8");
-  return JSON.parse(content) as RuntimeBundle;
 }
 
 export async function seedRuntimeBundle(
