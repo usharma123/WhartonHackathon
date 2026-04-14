@@ -1,0 +1,124 @@
+{
+  "text_length_threshold": 20,
+  "temporal_cutoff": "2025-01-01",
+  "task_inventory": [
+    {
+      "task": "overall",
+      "n_rows": 3855,
+      "n_properties": 13,
+      "date_min": "2023-02-08",
+      "date_max": "2026-02-06",
+      "negative_share_lte3": 0.22879377431906614
+    },
+    {
+      "task": "cleanliness",
+      "n_rows": 3705,
+      "n_properties": 13,
+      "date_min": "2023-02-08",
+      "date_max": "2026-02-06",
+      "negative_share_lte3": 0.16437246963562754
+    },
+    {
+      "task": "service",
+      "n_rows": 3564,
+      "n_properties": 13,
+      "date_min": "2023-02-08",
+      "date_max": "2026-01-30",
+      "negative_share_lte3": 0.1627384960718294
+    },
+    {
+      "task": "ecofriendliness",
+      "n_rows": 1564,
+      "n_properties": 13,
+      "date_min": "2023-02-08",
+      "date_max": "2026-02-05",
+      "negative_share_lte3": 0.23465473145780052
+    }
+  ],
+  "best_grouped_binary_auc": [
+    {
+      "task": "overall",
+      "roc_auc": 0.9036745697459073,
+      "avg_precision": 0.7157215970047657,
+      "f1": 0.6699009499805029
+    },
+    {
+      "task": "service",
+      "roc_auc": 0.8741811762776595,
+      "avg_precision": 0.5862815834849671,
+      "f1": 0.5580428830927581
+    },
+    {
+      "task": "cleanliness",
+      "roc_auc": 0.8697739475787699,
+      "avg_precision": 0.5173318519818729,
+      "f1": 0.5234011086952263
+    },
+    {
+      "task": "ecofriendliness",
+      "roc_auc": 0.7903466148410383,
+      "avg_precision": 0.5457519069543135,
+      "f1": 0.5455313253540574
+    }
+  ],
+  "best_temporal_binary_auc": [
+    {
+      "task": "overall",
+      "roc_auc": 0.936451048951049,
+      "avg_precision": 0.7860924654047314,
+      "f1": 0.7430555555555556
+    },
+    {
+      "task": "cleanliness",
+      "roc_auc": 0.9162693477059148,
+      "avg_precision": 0.7143216640437939,
+      "f1": 0.6727272727272727
+    },
+    {
+      "task": "service",
+      "roc_auc": 0.9105230957479352,
+      "avg_precision": 0.6999406490135217,
+      "f1": 0.6524064171122995
+    },
+    {
+      "task": "ecofriendliness",
+      "roc_auc": 0.808816425120773,
+      "avg_precision": 0.6139663658730438,
+      "f1": 0.5780346820809249
+    }
+  ],
+  "best_grouped_regression_mae": [
+    {
+      "task": "service",
+      "mae": 0.5873493838944743,
+      "mae_rounded": 0.5487429636687751
+    },
+    {
+      "task": "overall",
+      "mae": 0.5998986511705586,
+      "mae_rounded": 0.5651379423468132
+    },
+    {
+      "task": "cleanliness",
+      "mae": 0.6005366217276239,
+      "mae_rounded": 0.5616239918943564
+    },
+    {
+      "task": "ecofriendliness",
+      "mae": 0.6814650108901763,
+      "mae_rounded": 0.6510703888737298
+    }
+  ],
+  "validated_conflict_counts": {
+    "know_before_you_go": 25,
+    "check_in": 16,
+    "check_out": 15,
+    "amenities_breakfast": 15,
+    "amenities_parking": 7,
+    "amenities_pool": 5,
+    "amenities_wifi": 2,
+    "pet": 2,
+    "amenities_gym": 2,
+    "children_extra_bed": 1
+  }
+}

@@ -1,0 +1,421 @@
+{
+  "reviews_embedded": 4091,
+  "embedding_model": "text-embedding-3-small",
+  "lexical_vs_semantic": [
+    {
+      "facet": "pet",
+      "lexical_hits": 29,
+      "semantic_hits": 340,
+      "both": 20,
+      "lex_only": 9,
+      "sem_only": 320,
+      "agreement_jaccard": 0.05730659025787966
+    },
+    {
+      "facet": "check_in",
+      "lexical_hits": 522,
+      "semantic_hits": 2293,
+      "both": 485,
+      "lex_only": 37,
+      "sem_only": 1808,
+      "agreement_jaccard": 0.20815450643776823
+    },
+    {
+      "facet": "check_out",
+      "lexical_hits": 82,
+      "semantic_hits": 621,
+      "both": 57,
+      "lex_only": 25,
+      "sem_only": 564,
+      "agreement_jaccard": 0.08823529411764706
+    },
+    {
+      "facet": "amenities_pool",
+      "lexical_hits": 275,
+      "semantic_hits": 1348,
+      "both": 255,
+      "lex_only": 20,
+      "sem_only": 1093,
+      "agreement_jaccard": 0.18640350877192982
+    },
+    {
+      "facet": "amenities_wifi",
+      "lexical_hits": 61,
+      "semantic_hits": 109,
+      "both": 30,
+      "lex_only": 31,
+      "sem_only": 79,
+      "agreement_jaccard": 0.21428571428571427
+    },
+    {
+      "facet": "amenities_breakfast",
+      "lexical_hits": 517,
+      "semantic_hits": 1270,
+      "both": 454,
+      "lex_only": 63,
+      "sem_only": 816,
+      "agreement_jaccard": 0.34058514628657166
+    },
+    {
+      "facet": "amenities_parking",
+      "lexical_hits": 290,
+      "semantic_hits": 1426,
+      "both": 224,
+      "lex_only": 66,
+      "sem_only": 1202,
+      "agreement_jaccard": 0.15013404825737264
+    },
+    {
+      "facet": "amenities_gym",
+      "lexical_hits": 36,
+      "semantic_hits": 319,
+      "both": 31,
+      "lex_only": 5,
+      "sem_only": 288,
+      "agreement_jaccard": 0.09567901234567901
+    },
+    {
+      "facet": "children_extra_bed",
+      "lexical_hits": 139,
+      "semantic_hits": 1951,
+      "both": 120,
+      "lex_only": 19,
+      "sem_only": 1831,
+      "agreement_jaccard": 0.06091370558375635
+    },
+    {
+      "facet": "know_before_you_go",
+      "lexical_hits": 234,
+      "semantic_hits": 782,
+      "both": 185,
+      "lex_only": 49,
+      "sem_only": 597,
+      "agreement_jaccard": 0.2226233453670277
+    }
+  ],
+  "semantic_thresholds": {
+    "pet": 0.45,
+    "check_in": 0.45,
+    "check_out": 0.4,
+    "amenities_pool": 0.45,
+    "amenities_wifi": 0.4,
+    "amenities_breakfast": 0.4,
+    "amenities_parking": 0.45,
+    "amenities_gym": 0.4,
+    "children_extra_bed": 0.45,
+    "know_before_you_go": 0.4
+  },
+  "avg_listing_review_cosine_overall": 0.25435846275830454,
+  "avg_listing_review_cosine_matched": 0.33269585605631485,
+  "facets_with_biggest_drift": {
+    "pet": 0.18417242169380188,
+    "check_out": 0.19816201696029076,
+    "know_before_you_go": 0.2186110901335875,
+    "amenities_gym": 0.2256880190510016,
+    "children_extra_bed": 0.2657950199567355
+  },
+  "facets_with_lowest_matched_support": {
+    "know_before_you_go": 0.2898439034819603,
+    "pet": 0.30724449704090756,
+    "amenities_pool": 0.307935431599617,
+    "amenities_gym": 0.318213158420154,
+    "check_out": 0.31946244023062964
+  },
+  "top_semantic_conflicts": [
+    {
+      "eg_property_id": "110f01b8ae518a0ee41047bce5c22572988a435e10ead72dc1af793bba8ce0b0",
+      "facet": "check_in",
+      "cos_anti": 0.4833109676837921,
+      "cos_listing": 0.6002452373504639,
+      "contradict_score": 0.29010510444641113,
+      "acquisition_date": "2024-05-20 00:00:00",
+      "review_snippet": "we check in after midnight and the front desk gentleman was very helpful"
+    },
+    {
+      "eg_property_id": "7d027ef72c02eaa17af3c993fd5dba50d17b41a6280389a46c13c7e2c32a5b06",
+      "facet": "amenities_parking",
+      "cos_anti": 0.6172135472297668,
+      "cos_listing": 0.4542931318283081,
+      "contradict_score": 0.28039586544036865,
+      "acquisition_date": "2023-03-02 00:00:00",
+      "review_snippet": "there was no parking upon arrival and i had to make parking arrangements off site"
+    },
+    {
+      "eg_property_id": "db38b19b897dbece3e34919c662b3fd66d23b615395d11fb69264dd3a9b17723",
+      "facet": "check_out",
+      "cos_anti": 0.49241870641708374,
+      "cos_listing": 0.543681263923645,
+      "contradict_score": 0.2677188217639923,
+      "acquisition_date": "2025-09-30 00:00:00",
+      "review_snippet": "easy check in and out"
+    },
+    {
+      "eg_property_id": "db38b19b897dbece3e34919c662b3fd66d23b615395d11fb69264dd3a9b17723",
+      "facet": "children_extra_bed",
+      "cos_anti": 0.5413451194763184,
+      "cos_listing": 0.4926912188529968,
+      "contradict_score": 0.26671597361564636,
+      "acquisition_date": "2023-10-22 00:00:00",
+      "review_snippet": "it was okay. the room service food was average and there was no kid's menu. the furniture was nice but rundown. it was mostly clean but minor issues here and there. the pool and hot tub had a lot of debris in them, including dead flies. the"
+    },
+    {
+      "eg_property_id": "ff26cdda236b233f7c481f0e896814075ac6bed335e162e0ff01d5491343f838",
+      "facet": "amenities_breakfast",
+      "cos_anti": 0.5530816316604614,
+      "cos_listing": 0.47931310534477234,
+      "contradict_score": 0.26509928703308105,
+      "acquisition_date": "2023-03-07 00:00:00",
+      "review_snippet": "half used amenities. shower leaked. half ingredients on the menu missing for breakfast - had to go somewhere else for breakfast. comfortable enough but not much attention to detail"
+    },
+    {
+      "eg_property_id": "7d027ef72c02eaa17af3c993fd5dba50d17b41a6280389a46c13c7e2c32a5b06",
+      "facet": "pet",
+      "cos_anti": 0.5639575123786926,
+      "cos_listing": 0.46274101734161377,
+      "contradict_score": 0.2609662711620331,
+      "acquisition_date": "2024-06-11 00:00:00",
+      "review_snippet": "the check in was great... they are a pet friendly hotel but there is no area at all to walk your pet. not even anywhere close. the morning of check out we were interrogated about if i had paid the pet fee. to the point of harassment by morn"
+    },
+    {
+      "eg_property_id": "7d027ef72c02eaa17af3c993fd5dba50d17b41a6280389a46c13c7e2c32a5b06",
+      "facet": "amenities_parking",
+      "cos_anti": 0.6171407699584961,
+      "cos_listing": 0.4224487543106079,
+      "contradict_score": 0.26071035861968994,
+      "acquisition_date": "2024-02-13 00:00:00",
+      "review_snippet": "very difficult to access, parking is tight, room was cramped and lacked amenities,"
+    },
+    {
+      "eg_property_id": "7d027ef72c02eaa17af3c993fd5dba50d17b41a6280389a46c13c7e2c32a5b06",
+      "facet": "amenities_parking",
+      "cos_anti": 0.591187596321106,
+      "cos_listing": 0.4363517165184021,
+      "contradict_score": 0.25796571373939514,
+      "acquisition_date": "2024-02-04 00:00:00",
+      "review_snippet": "not much parking"
+    },
+    {
+      "eg_property_id": "ff26cdda236b233f7c481f0e896814075ac6bed335e162e0ff01d5491343f838",
+      "facet": "amenities_breakfast",
+      "cos_anti": 0.6382555961608887,
+      "cos_listing": 0.4026961028575897,
+      "contradict_score": 0.25702303647994995,
+      "acquisition_date": "2023-03-02 00:00:00",
+      "review_snippet": "it said breakfast included and it were not"
+    },
+    {
+      "eg_property_id": "ff26cdda236b233f7c481f0e896814075ac6bed335e162e0ff01d5491343f838",
+      "facet": "amenities_breakfast",
+      "cos_anti": 0.5761088132858276,
+      "cos_listing": 0.4420907497406006,
+      "contradict_score": 0.2546923756599426,
+      "acquisition_date": "2023-10-24 00:00:00",
+      "review_snippet": "the expedia booking made it look like breakfast was included and when i got there it was not, and ironically there was nothing set up and no one eating breakfast either.  in the evening when i tried to order a beer and something eat at the "
+    }
+  ],
+  "top_validated_semantic_conflicts": [
+    {
+      "eg_property_id": "823fb2499b4e37d99acb65e7198e75965d6496fd1c579f976205c0e6179206df",
+      "facet": "know_before_you_go",
+      "semantic_score": 0.4716728925704956,
+      "threshold": 0.4,
+      "cos_negative": 0.4790215492248535,
+      "cos_positive": 0.265392929315567,
+      "neg_delta": 0.2136286199092865,
+      "cos_listing": 0.3420528173446655,
+      "neg_hint": 1,
+      "validated_conflict_score": 0.07307226955890656,
+      "acquisition_date": "2023-11-16 00:00:00",
+      "review_snippet": "1. the sink is too low & the faucet too high that water always spout out of the sink.\n2. the frame in bathroom was rotten at room# 703.\n3. air condition was fail for several rooms without any reason.\n4. extra charge euro$60 for city/local t"
+    },
+    {
+      "eg_property_id": "fa014137b3ea9af6a90c0a86a1d099e46f7e56d6eb33db1ad1ec4bdac68c3caa",
+      "facet": "amenities_parking",
+      "semantic_score": 0.661582350730896,
+      "threshold": 0.45,
+      "cos_negative": 0.668124794960022,
+      "cos_positive": 0.5077479481697083,
+      "neg_delta": 0.16037684679031372,
+      "cos_listing": 0.3748592138290405,
+      "neg_hint": 1,
+      "validated_conflict_score": 0.06011873856186867,
+      "acquisition_date": "2023-03-16 00:00:00",
+      "review_snippet": "parking is a problem . the spaces are to few and are very difficult to get  into.\n,"
+    },
+    {
+      "eg_property_id": "db38b19b897dbece3e34919c662b3fd66d23b615395d11fb69264dd3a9b17723",
+      "facet": "know_before_you_go",
+      "semantic_score": 0.44056615233421326,
+      "threshold": 0.4,
+      "cos_negative": 0.4514862895011902,
+      "cos_positive": 0.2911245822906494,
+      "neg_delta": 0.16036170721054077,
+      "cos_listing": 0.35550177097320557,
+      "neg_hint": 1,
+      "validated_conflict_score": 0.05700886994600296,
+      "acquisition_date": "2024-04-23 00:00:00",
+      "review_snippet": "the hotel itself needs some upgrades for the prices they charging. the front door was boarded up cause the front door glass was broken. a little noisy by the freeway"
+    },
+    {
+      "eg_property_id": "7d027ef72c02eaa17af3c993fd5dba50d17b41a6280389a46c13c7e2c32a5b06",
+      "facet": "amenities_parking",
+      "semantic_score": 0.5210541486740112,
+      "threshold": 0.45,
+      "cos_negative": 0.5217172503471375,
+      "cos_positive": 0.3980906009674072,
+      "neg_delta": 0.12362664937973022,
+      "cos_listing": 0.4596443474292755,
+      "neg_hint": 1,
+      "validated_conflict_score": 0.05682428926229477,
+      "acquisition_date": "2023-03-02 00:00:00",
+      "review_snippet": "not enough parking. we had to park our uhual wth a car being pulled at in of building in a gas station parking lot and some one parked right behind us and it was very difficult to get out. hotel staff didn\u2019t take its plate number like they "
+    },
+    {
+      "eg_property_id": "7d027ef72c02eaa17af3c993fd5dba50d17b41a6280389a46c13c7e2c32a5b06",
+      "facet": "amenities_parking",
+      "semantic_score": 0.6192015409469604,
+      "threshold": 0.45,
+      "cos_negative": 0.6171407699584961,
+      "cos_positive": 0.4930896461009979,
+      "neg_delta": 0.12405112385749817,
+      "cos_listing": 0.4224487543106079,
+      "neg_hint": 1,
+      "validated_conflict_score": 0.05240524187684059,
+      "acquisition_date": "2024-02-13 00:00:00",
+      "review_snippet": "very difficult to access, parking is tight, room was cramped and lacked amenities,"
+    },
+    {
+      "eg_property_id": "ff26cdda236b233f7c481f0e896814075ac6bed335e162e0ff01d5491343f838",
+      "facet": "check_in",
+      "semantic_score": 0.5423526167869568,
+      "threshold": 0.45,
+      "cos_negative": 0.4970987141132355,
+      "cos_positive": 0.37235027551651,
+      "neg_delta": 0.12474843859672546,
+      "cos_listing": 0.38789865374565125,
+      "neg_hint": 1,
+      "validated_conflict_score": 0.048389751464128494,
+      "acquisition_date": "2023-03-02 00:00:00",
+      "review_snippet": "several members of staff had a poor attitude.. 1. i was told over the phone that we could check in at 1:30. \r\nthe front desk curtly told me not before 2pm. \r\n2. after waiting 10 minutes for her to get off the phone, i was told that they did"
+    },
+    {
+      "eg_property_id": "ff26cdda236b233f7c481f0e896814075ac6bed335e162e0ff01d5491343f838",
+      "facet": "check_in",
+      "semantic_score": 0.4841236472129822,
+      "threshold": 0.45,
+      "cos_negative": 0.47297221422195435,
+      "cos_positive": 0.32924550771713257,
+      "neg_delta": 0.14372670650482178,
+      "cos_listing": 0.3329267203807831,
+      "neg_hint": 1,
+      "validated_conflict_score": 0.047850459814071655,
+      "acquisition_date": "2023-03-16 00:00:00",
+      "review_snippet": "1. early checkin was a disaster. first i had to wait for 40 minutes and then to be told it would be another 30 minutes. i don't think so.\n2. restaurant staff is very poorly trained (even the chef showed up late one morning)\n3. the amenities"
+    },
+    {
+      "eg_property_id": "fa014137b3ea9af6a90c0a86a1d099e46f7e56d6eb33db1ad1ec4bdac68c3caa",
+      "facet": "check_in",
+      "semantic_score": 0.6434676051139832,
+      "threshold": 0.45,
+      "cos_negative": 0.5911449790000916,
+      "cos_positive": 0.4710700511932373,
+      "neg_delta": 0.12007492780685425,
+      "cos_listing": 0.39330756664276123,
+      "neg_hint": 1,
+      "validated_conflict_score": 0.047226376831531525,
+      "acquisition_date": "2023-03-02 00:00:00",
+      "review_snippet": "check- in was at 3pm .. they checked us in but the room was not ready at all!! we were made to wait for almost an hour in the corridor because the room was in the 3rd floor and it was a hassle for us to go down again with all of our luggage"
+    },
+    {
+      "eg_property_id": "db38b19b897dbece3e34919c662b3fd66d23b615395d11fb69264dd3a9b17723",
+      "facet": "children_extra_bed",
+      "semantic_score": 0.5018594264984131,
+      "threshold": 0.45,
+      "cos_negative": 0.5413451194763184,
+      "cos_positive": 0.4460412859916687,
+      "neg_delta": 0.09530383348464966,
+      "cos_listing": 0.4926912188529968,
+      "neg_hint": 1,
+      "validated_conflict_score": 0.04695536196231842,
+      "acquisition_date": "2023-10-22 00:00:00",
+      "review_snippet": "it was okay. the room service food was average and there was no kid's menu. the furniture was nice but rundown. it was mostly clean but minor issues here and there. the pool and hot tub had a lot of debris in them, including dead flies. the"
+    },
+    {
+      "eg_property_id": "db38b19b897dbece3e34919c662b3fd66d23b615395d11fb69264dd3a9b17723",
+      "facet": "know_before_you_go",
+      "semantic_score": 0.4028836488723755,
+      "threshold": 0.4,
+      "cos_negative": 0.3904132843017578,
+      "cos_positive": 0.24663427472114563,
+      "neg_delta": 0.14377900958061218,
+      "cos_listing": 0.32356029748916626,
+      "neg_hint": 1,
+      "validated_conflict_score": 0.046521179378032684,
+      "acquisition_date": "2024-11-05 00:00:00",
+      "review_snippet": "this was the worst experience ever in a hotel!!!  hotel room was in total disrepair. shower didn't work - only scalding hot water would come out, toilet made noise, and paper-thin walls could easily hear guests next room over, and had to sw"
+    }
+  ],
+  "temporal_drift_max": [
+    {
+      "eg_property_id": "9a0043fd4258a1286db1e253ca591662b3aac849da12d0d4f67e08b8f59be65f",
+      "first_quarter": "2023Q1",
+      "last_quarter": "2025Q4",
+      "n_first": 81,
+      "n_last": 3,
+      "cosine_first_vs_last": 0.8268479108810425,
+      "drift": 0.17315208911895752
+    },
+    {
+      "eg_property_id": "fa014137b3ea9af6a90c0a86a1d099e46f7e56d6eb33db1ad1ec4bdac68c3caa",
+      "first_quarter": "2023Q1",
+      "last_quarter": "2026Q1",
+      "n_first": 319,
+      "n_last": 5,
+      "cosine_first_vs_last": 0.8413608074188232,
+      "drift": 0.15863919258117676
+    },
+    {
+      "eg_property_id": "ff26cdda236b233f7c481f0e896814075ac6bed335e162e0ff01d5491343f838",
+      "first_quarter": "2023Q1",
+      "last_quarter": "2026Q1",
+      "n_first": 237,
+      "n_last": 8,
+      "cosine_first_vs_last": 0.8580732345581055,
+      "drift": 0.14192676544189453
+    }
+  ],
+  "redundancy_max": [
+    {
+      "eg_property_id": "9a0043fd4258a1286db1e253ca591662b3aac849da12d0d4f67e08b8f59be65f",
+      "n_sampled": 109,
+      "mean_pairwise_cosine": 0.44819626212120056
+    },
+    {
+      "eg_property_id": "f2d8d9557208d58577e9df7ff34e42bf86fb5b10fdfae0c3040d14c374a2a2b9",
+      "n_sampled": 140,
+      "mean_pairwise_cosine": 0.4220195710659027
+    },
+    {
+      "eg_property_id": "fa014137b3ea9af6a90c0a86a1d099e46f7e56d6eb33db1ad1ec4bdac68c3caa",
+      "n_sampled": 150,
+      "mean_pairwise_cosine": 0.41055577993392944
+    }
+  ],
+  "semantic_audit_rows": 150,
+  "kmeans_cluster_sizes": [
+    135,
+    228,
+    545,
+    138,
+    469,
+    319,
+    144,
+    484,
+    276,
+    255,
+    262,
+    295,
+    405,
+    136
+  ]
+}

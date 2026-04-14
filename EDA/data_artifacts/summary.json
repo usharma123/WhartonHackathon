@@ -1,0 +1,66 @@
+{
+  "profile": {
+    "n_properties": 13,
+    "n_reviews": 5999,
+    "date_min": "2023-02-06",
+    "date_max": "2026-02-06",
+    "empty_title_pct": 92.68211368561427,
+    "empty_text_pct": 28.9714952492082,
+    "text_len_mean": 113.97116186031005,
+    "text_len_median": 58.0,
+    "per_prop_count_min": 8,
+    "per_prop_count_max": 1094,
+    "per_prop_count_median": 152
+  },
+  "facet_overall_mention_rates_pct": {
+    "pet": 0.48,
+    "check_in": 8.7,
+    "check_out": 1.37,
+    "amenities_pool": 4.58,
+    "amenities_wifi": 1.05,
+    "amenities_breakfast": 8.62,
+    "amenities_parking": 4.83,
+    "amenities_gym": 0.6,
+    "children_extra_bed": 2.32,
+    "know_before_you_go": 3.92
+  },
+  "n_stale_cells_gt_180d": 90,
+  "n_conflict_candidates_p_over_0_5": 7,
+  "top_conflict": [
+    {
+      "eg_property_id": "3216b1b7885bffdb336265a8de7322ba0cd477cfb3d4f99d19acf488f76a1941",
+      "facet": "know_before_you_go",
+      "n_mentions": 48,
+      "neg_rate": 0.375,
+      "p_neg_over_30pct": 0.885
+    },
+    {
+      "eg_property_id": "7d027ef72c02eaa17af3c993fd5dba50d17b41a6280389a46c13c7e2c32a5b06",
+      "facet": "check_out",
+      "n_mentions": 19,
+      "neg_rate": 0.3684210526315789,
+      "p_neg_over_30pct": 0.7676000000000001
+    },
+    {
+      "eg_property_id": "7d027ef72c02eaa17af3c993fd5dba50d17b41a6280389a46c13c7e2c32a5b06",
+      "facet": "pet",
+      "n_mentions": 14,
+      "neg_rate": 0.35714285714285715,
+      "p_neg_over_30pct": 0.7142
+    },
+    {
+      "eg_property_id": "7d027ef72c02eaa17af3c993fd5dba50d17b41a6280389a46c13c7e2c32a5b06",
+      "facet": "amenities_wifi",
+      "n_mentions": 17,
+      "neg_rate": 0.35294117647058826,
+      "p_neg_over_30pct": 0.7026
+    },
+    {
+      "eg_property_id": "3216b1b7885bffdb336265a8de7322ba0cd477cfb3d4f99d19acf488f76a1941",
+      "facet": "check_out",
+      "n_mentions": 9,
+      "neg_rate": 0.3333333333333333,
+      "p_neg_over_30pct": 0.6602
+    }
+  ]
+}

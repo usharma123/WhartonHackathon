@@ -1,0 +1,22 @@
+{
+  "name": "reviewgap-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "export:runtime": "python3 EDA/scripts/export_runtime_artifacts.py",
+    "check": "pnpm run build && pnpm run test"
+  },
+  "dependencies": {
+    "convex": "^1.25.4",
+    "openai": "^4.104.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

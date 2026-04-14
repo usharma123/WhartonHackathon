@@ -1,0 +1,11 @@
+facet,threshold,threshold_type
+pet,0.45,selected
+check_in,0.45,selected
+check_out,0.4,selected
+amenities_pool,0.45,selected
+amenities_wifi,0.4,selected
+amenities_breakfast,0.4,selected
+amenities_parking,0.45,selected
+amenities_gym,0.4,selected
+children_extra_bed,0.45,selected
+know_before_you_go,0.4,selected
