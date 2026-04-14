@@ -4,6 +4,7 @@ import {
   type RuntimeFacet,
 } from "./facets.js";
 import type {
+  PropertyFacetLiveSignal,
   PropertyFacetMetric,
   ReviewAnalysisResult,
   ScoreBreakdown,
@@ -30,6 +31,25 @@ export function matchedSupport(metric: PropertyFacetMetric): number {
     return 0;
   }
   return clamp(metric.meanCosMatchedReviews);
+}
+
+export function applyLiveSignalToMetric(
+  metric: PropertyFacetMetric,
+  signal?: PropertyFacetLiveSignal,
+): PropertyFacetMetric {
+  if (!signal) {
+    return metric;
+  }
+  return {
+    ...metric,
+    mentionRate: signal.mentionRate,
+    daysSince: signal.daysSince,
+    stalenessScore: round(normalizeStaleness(signal.daysSince)),
+    validatedConflictScore: signal.conflictScore,
+    validatedConflictCount:
+      signal.conflictScore > 0 ? Math.max(metric.validatedConflictCount, 1) : 0,
+    listingTextPresent: signal.listingTextPresent,
+  };
 }
 
 export function buildScoreBreakdown(

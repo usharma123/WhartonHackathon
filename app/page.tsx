@@ -10,9 +10,27 @@ type DemoProperty = {
   city?: string;
   province?: string;
   country?: string;
+  starRating?: number;
+  guestRating?: number;
   propertySummary: string;
+  popularAmenities?: string;
+  reviewCount: number;
   demoFlags: string[];
   demoScenario?: string;
+  sourceVendor?: "expedia";
+  sourceUrl?: string;
+  lastValidatedAt?: string;
+  validationStatus?: "idle" | "refreshing" | "success" | "error";
+  liveReviewCount?: number;
+};
+
+type PropertyValidationState = {
+  propertyId: string;
+  sourceVendor?: "expedia";
+  sourceUrl?: string;
+  lastValidatedAt?: string;
+  validationStatus: "idle" | "refreshing" | "success" | "error";
+  liveReviewCount: number;
 };
 
 type ChatMessage =
@@ -32,6 +50,9 @@ export default function HomePage() {
   const analyzeDraftReview = useAction(api.reviewGapActions.analyzeDraftReview);
   const selectNextQuestion = useAction(api.reviewGapActions.selectNextQuestion);
   const submitFollowUpAnswer = useAction(api.reviewGapActions.submitFollowUpAnswer);
+  const validatePropertyFromExpediaUrl = useAction(
+    api.reviewGapActions.validatePropertyFromExpediaUrl,
+  );
 
   const [view, setView] = useState<View>("property");
   const [propertyId, setPropertyId] = useState<string>("");
@@ -48,6 +69,10 @@ export default function HomePage() {
   const [hasDraft, setHasDraft] = useState(false);
   const [followUpCount, setFollowUpCount] = useState(0);
   const [askedFacets, setAskedFacets] = useState<string[]>([]);
+  const [expediaUrl, setExpediaUrl] = useState("");
+  const [isValidatingProperty, setIsValidatingProperty] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validationNotice, setValidationNotice] = useState<string | null>(null);
 
   const chatBodyRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -79,10 +104,20 @@ export default function HomePage() {
     [properties, propertyId],
   );
 
-  const otherProperties = useMemo(
-    () => (properties ?? []).filter((p) => p.propertyId !== propertyId),
-    [properties, propertyId],
-  );
+  const validationState = useQuery(
+    api.reviewGapPublic.getPropertyValidationState,
+    propertyId ? { propertyId } : "skip",
+  ) as PropertyValidationState | null | undefined;
+
+  useEffect(() => {
+    setValidationError(null);
+    setValidationNotice(null);
+    if (selectedProperty?.sourceUrl) {
+      setExpediaUrl(selectedProperty.sourceUrl);
+      return;
+    }
+    setExpediaUrl("");
+  }, [propertyId, selectedProperty?.sourceUrl]);
 
   const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -110,6 +145,36 @@ export default function HomePage() {
 
   function backToProperty() {
     setView("property");
+  }
+
+  async function validateSelectedProperty() {
+    const trimmed = expediaUrl.trim();
+    if (!propertyId || !trimmed || isValidatingProperty) {
+      return;
+    }
+    setValidationError(null);
+    setValidationNotice(null);
+    setIsValidatingProperty(true);
+    try {
+      const result = await validatePropertyFromExpediaUrl({
+        propertyId,
+        expediaUrl: trimmed,
+      });
+      setValidationNotice(
+        result.sampledReviewCount > 0
+          ? `Validated from Expedia with ${result.sampledReviewCount} sampled review${
+              result.sampledReviewCount === 1 ? "" : "s"
+            }.`
+          : "Validated the Expedia listing. No visible review snippets were extracted from this page shape, so seeded review signals remain in use.",
+      );
+      setExpediaUrl(result.validationState.sourceUrl ?? trimmed);
+    } catch (caught) {
+      setValidationError(
+        caught instanceof Error ? caught.message : "Could not validate this Expedia page.",
+      );
+    } finally {
+      setIsValidatingProperty(false);
+    }
   }
 
   async function sendUserMessage() {
@@ -305,9 +370,15 @@ export default function HomePage() {
           <PropertyScreen
             properties={properties ?? []}
             selected={selectedProperty}
-            otherProperties={otherProperties}
             onSelect={setPropertyId}
             onStart={startReview}
+            validationState={validationState ?? null}
+            expediaUrl={expediaUrl}
+            onExpediaUrlChange={setExpediaUrl}
+            onValidate={validateSelectedProperty}
+            isValidatingProperty={isValidatingProperty}
+            validationError={validationError}
+            validationNotice={validationNotice}
           />
         ) : (
           <ChatScreen
@@ -327,6 +398,13 @@ export default function HomePage() {
             chatBodyRef={chatBodyRef}
             textareaRef={textareaRef}
             error={error}
+            validationState={validationState ?? null}
+            expediaUrl={expediaUrl}
+            onExpediaUrlChange={setExpediaUrl}
+            onValidate={validateSelectedProperty}
+            isValidatingProperty={isValidatingProperty}
+            validationError={validationError}
+            validationNotice={validationNotice}
           />
         )}
       </div>
@@ -339,15 +417,27 @@ export default function HomePage() {
 function PropertyScreen({
   properties,
   selected,
-  otherProperties,
   onSelect,
   onStart,
+  validationState,
+  expediaUrl,
+  onExpediaUrlChange,
+  onValidate,
+  isValidatingProperty,
+  validationError,
+  validationNotice,
 }: {
   properties: DemoProperty[];
   selected: DemoProperty | null;
-  otherProperties: DemoProperty[];
   onSelect: (id: string) => void;
   onStart: () => void;
+  validationState: PropertyValidationState | null;
+  expediaUrl: string;
+  onExpediaUrlChange: (value: string) => void;
+  onValidate: () => void;
+  isValidatingProperty: boolean;
+  validationError: string | null;
+  validationNotice: string | null;
 }) {
   const locationLine = selected
     ? [selected.city, selected.province, selected.country].filter(Boolean).join(" · ")
@@ -361,6 +451,21 @@ function PropertyScreen({
   };
 
   const [first, last] = splitName(selected?.city);
+  const ratingLabel =
+    typeof selected?.guestRating === "number" ? selected.guestRating.toFixed(1) : "4.6";
+  const starRatingLabel =
+    typeof selected?.starRating === "number" ? selected.starRating.toFixed(1) : "—";
+  const reviewCountLabel =
+    validationState?.liveReviewCount || selected?.liveReviewCount
+      ? `${validationState?.liveReviewCount ?? selected?.liveReviewCount} sampled`
+      : `${selected?.reviewCount ?? 0}`;
+  const amenityChips =
+    selected?.popularAmenities
+      ?.split(/[;,]/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 6) ??
+    (selected?.demoFlags ?? ["wifi", "breakfast", "gym", "pool", "pet friendly"]).slice(0, 6);
 
   return (
     <>
@@ -374,6 +479,9 @@ function PropertyScreen({
             ) : (
               <span>Curated</span>
             )}
+            {selected?.sourceVendor === "expedia" ? (
+              <span className="validation-pill">validated from Expedia</span>
+            ) : null}
           </div>
 
           <h1 className="property-title">
@@ -398,16 +506,16 @@ function PropertyScreen({
             <div className="property-stat">
               <span className="k">Rating</span>
               <span className="v">
-                <span className="star">★</span>4.6
+                <span className="star">★</span>{ratingLabel}
               </span>
             </div>
             <div className="property-stat">
               <span className="k">Reviews</span>
-              <span className="v">1,284</span>
+              <span className="v">{reviewCountLabel}</span>
             </div>
             <div className="property-stat">
-              <span className="k">From</span>
-              <span className="v">$248<span style={{ fontSize: "0.8rem", color: "var(--bone-faint)", marginLeft: 4 }}>/ night</span></span>
+              <span className="k">Stars</span>
+              <span className="v">{starRatingLabel}</span>
             </div>
           </div>
 
@@ -415,6 +523,17 @@ function PropertyScreen({
             Write a review
             <span className="arrow">→</span>
           </button>
+
+          <ExpediaValidationPanel
+            property={selected}
+            validationState={validationState}
+            expediaUrl={expediaUrl}
+            onExpediaUrlChange={onExpediaUrlChange}
+            onValidate={onValidate}
+            isValidatingProperty={isValidatingProperty}
+            validationError={validationError}
+            validationNotice={validationNotice}
+          />
         </div>
 
         <div className="property-visual">
@@ -432,7 +551,7 @@ function PropertyScreen({
             </div>
           </div>
           <div className="amenities">
-            {(selected?.demoFlags ?? ["wifi", "breakfast", "gym", "pool", "pet friendly"]).slice(0, 6).map((flag) => (
+            {amenityChips.map((flag) => (
               <span className="amenity-chip" key={flag}>
                 {flag.replaceAll("_", " ")}
               </span>
@@ -447,7 +566,7 @@ function PropertyScreen({
             <h2>
               Or choose <em>another</em> stay
             </h2>
-            <span className="caption">{properties.length} curated</span>
+            <span className="caption">{properties.length} seeded from data</span>
           </div>
 
           <div className="property-row">
@@ -498,6 +617,13 @@ function ChatScreen({
   chatBodyRef,
   textareaRef,
   error,
+  validationState,
+  expediaUrl,
+  onExpediaUrlChange,
+  onValidate,
+  isValidatingProperty,
+  validationError,
+  validationNotice,
 }: {
   selected: DemoProperty | null;
   messages: ChatMessage[];
@@ -515,7 +641,21 @@ function ChatScreen({
   chatBodyRef: React.RefObject<HTMLDivElement | null>;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   error: string | null;
+  validationState: PropertyValidationState | null;
+  expediaUrl: string;
+  onExpediaUrlChange: (value: string) => void;
+  onValidate: () => void;
+  isValidatingProperty: boolean;
+  validationError: string | null;
+  validationNotice: string | null;
 }) {
+  const ratingLabel =
+    typeof selected?.guestRating === "number" ? selected.guestRating.toFixed(1) : "4.6";
+  const reviewCountLabel =
+    validationState?.liveReviewCount || selected?.liveReviewCount
+      ? `${validationState?.liveReviewCount ?? selected?.liveReviewCount} sampled reviews`
+      : `${selected?.reviewCount ?? 0} reviews`;
+
   return (
     <div className="chat-screen">
       {/* Main conversation */}
@@ -619,10 +759,25 @@ function ChatScreen({
           <h3>{selected?.city ?? "Your stay"}</h3>
           <div className="rating">
             <span className="stars">★★★★★</span>
-            <span>4.6 · 1,284 reviews</span>
+            <span>{ratingLabel} · {reviewCountLabel}</span>
           </div>
           <p className="summary">{selected?.propertySummary}</p>
+          {selected?.sourceVendor === "expedia" ? (
+            <div className="side-badge">validated from Expedia</div>
+          ) : null}
         </div>
+
+        <ExpediaValidationPanel
+          property={selected}
+          validationState={validationState}
+          expediaUrl={expediaUrl}
+          onExpediaUrlChange={onExpediaUrlChange}
+          onValidate={onValidate}
+          isValidatingProperty={isValidatingProperty}
+          validationError={validationError}
+          validationNotice={validationNotice}
+          compact
+        />
 
         <div className="side-kicker">What your review adds</div>
         {facts.length === 0 ? (
@@ -657,9 +812,99 @@ function ChatScreen({
   );
 }
 
+function ExpediaValidationPanel({
+  property,
+  validationState,
+  expediaUrl,
+  onExpediaUrlChange,
+  onValidate,
+  isValidatingProperty,
+  validationError,
+  validationNotice,
+  compact = false,
+}: {
+  property: DemoProperty | null;
+  validationState: PropertyValidationState | null;
+  expediaUrl: string;
+  onExpediaUrlChange: (value: string) => void;
+  onValidate: () => void;
+  isValidatingProperty: boolean;
+  validationError: string | null;
+  validationNotice: string | null;
+  compact?: boolean;
+}) {
+  const status = isValidatingProperty
+    ? "refreshing"
+    : validationState?.validationStatus ?? property?.validationStatus ?? "idle";
+  const lastValidatedAt = validationState?.lastValidatedAt ?? property?.lastValidatedAt;
+  const reviewCount = validationState?.liveReviewCount ?? property?.liveReviewCount ?? 0;
+
+  return (
+    <div className={`validation-panel ${compact ? "compact" : ""}`}>
+      <div className="validation-topline">
+        <span className={`validation-dot ${status}`} />
+        <span>{statusLabel(status)}</span>
+        {lastValidatedAt ? (
+          <span className="validation-meta">Updated {formatRelativeTime(lastValidatedAt)}</span>
+        ) : null}
+      </div>
+      <div className="validation-copy">
+        Paste an Expedia hotel URL to refresh this seeded property card with live listing copy and visible reviews.
+      </div>
+      <div className="validation-form">
+        <input
+          value={expediaUrl}
+          onChange={(e) => onExpediaUrlChange(e.target.value)}
+          placeholder="https://www.expedia.com/..."
+          disabled={!property || isValidatingProperty}
+        />
+        <button
+          type="button"
+          onClick={onValidate}
+          disabled={!property || !expediaUrl.trim() || isValidatingProperty}
+        >
+          {isValidatingProperty ? "Validating..." : "Validate with Expedia"}
+        </button>
+      </div>
+      {reviewCount > 0 ? (
+        <div className="validation-meta">
+          {reviewCount} sampled review{reviewCount === 1 ? "" : "s"} linked to this card.
+        </div>
+      ) : null}
+      {validationNotice ? <div className="validation-note success">{validationNotice}</div> : null}
+      {validationError ? <div className="validation-note error">{validationError}</div> : null}
+    </div>
+  );
+}
+
 function formatFactValue(v: unknown): string {
   if (typeof v === "boolean") return v ? "Yes" : "No";
   if (v === null || v === undefined) return "—";
   if (typeof v === "number") return String(v);
   return String(v);
+}
+
+function statusLabel(status: "idle" | "refreshing" | "success" | "error"): string {
+  if (status === "refreshing") return "Refreshing from Expedia";
+  if (status === "success") return "Live Expedia sync active";
+  if (status === "error") return "Last validation failed";
+  return "Seeded demo data";
+}
+
+function formatRelativeTime(value: string): string {
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) {
+    return value;
+  }
+  const diffMs = Date.now() - parsed;
+  const diffMinutes = Math.max(1, Math.round(diffMs / 60000));
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m ago`;
+  }
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `${diffHours}h ago`;
+  }
+  const diffDays = Math.round(diffHours / 24);
+  return `${diffDays}d ago`;
 }

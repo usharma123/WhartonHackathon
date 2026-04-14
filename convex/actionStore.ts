@@ -9,8 +9,14 @@ type ActionCtx = {
 
 const refs = {
   getProperty: "reviewGapInternal:getProperty",
+  patchProperty: "reviewGapInternal:patchProperty",
+  getPropertyValidationState: "reviewGapInternal:getPropertyValidationState",
   listPropertyFacetMetrics: "reviewGapInternal:listPropertyFacetMetrics",
+  listPropertyFacetLiveSignals: "reviewGapInternal:listPropertyFacetLiveSignals",
+  replacePropertyFacetLiveSignals: "reviewGapInternal:replacePropertyFacetLiveSignals",
   listPropertyFacetEvidence: "reviewGapInternal:listPropertyFacetEvidence",
+  replacePropertyFacetVendorEvidence: "reviewGapInternal:replacePropertyFacetVendorEvidence",
+  replacePropertyLiveReviews: "reviewGapInternal:replacePropertyLiveReviews",
   createReviewSession: "reviewGapInternal:createReviewSession",
   getReviewSession: "reviewGapInternal:getReviewSession",
   updateReviewSession: "reviewGapInternal:updateReviewSession",
@@ -32,17 +38,43 @@ export function createConvexActionStore(ctx: ActionCtx): ReviewGapStore {
     async upsertProperty() {
       throw new Error("upsertProperty is not supported from runtime actions.");
     },
+    async patchProperty(propertyId, patch) {
+      return ctx.runMutation(refs.patchProperty as any, { propertyId, patch });
+    },
+    async getPropertyValidationState(propertyId) {
+      return ctx.runQuery(refs.getPropertyValidationState as any, { propertyId });
+    },
     async listPropertyFacetMetrics(propertyId) {
       return ctx.runQuery(refs.listPropertyFacetMetrics as any, { propertyId });
     },
     async upsertPropertyFacetMetric() {
       throw new Error("upsertPropertyFacetMetric is not supported from runtime actions.");
     },
+    async listPropertyFacetLiveSignals(propertyId) {
+      return ctx.runQuery(refs.listPropertyFacetLiveSignals as any, { propertyId });
+    },
+    async replacePropertyFacetLiveSignals(propertyId, signals) {
+      return ctx.runMutation(refs.replacePropertyFacetLiveSignals as any, { propertyId, signals });
+    },
     async listPropertyFacetEvidence(propertyId, facet) {
       return ctx.runQuery(refs.listPropertyFacetEvidence as any, { propertyId, facet });
     },
     async replacePropertyFacetEvidence() {
       throw new Error("replacePropertyFacetEvidence is not supported from runtime actions.");
+    },
+    async replacePropertyFacetVendorEvidence(propertyId, facet, vendor, evidence) {
+      return ctx.runMutation(refs.replacePropertyFacetVendorEvidence as any, {
+        propertyId,
+        facet,
+        vendor,
+        evidence,
+      });
+    },
+    async listPropertyLiveReviews() {
+      throw new Error("listPropertyLiveReviews is not supported from runtime actions.");
+    },
+    async replacePropertyLiveReviews(propertyId, reviews) {
+      return ctx.runMutation(refs.replacePropertyLiveReviews as any, { propertyId, reviews });
     },
     async createReviewSession(session) {
       return ctx.runMutation(refs.createReviewSession as any, { session });

@@ -1,0 +1,20 @@
+[
+  {
+    "propertyId": "expedia_sample_1",
+    "expediaUrl": "https://www.expedia.com/Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_sample_2",
+    "expediaUrl": "https://www.expedia.com/Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_sample_3",
+    "expediaUrl": "https://www.expedia.com/Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  }
+]

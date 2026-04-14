@@ -4,6 +4,8 @@ import { v } from "convex/values";
 import { createConvexStore } from "../src/backend/convexStore.js";
 import { seedRuntimeBundle, type RuntimeBundle } from "../src/backend/runtimeBundle.js";
 import type { FacetClassifierArtifact } from "../src/backend/ml.js";
+import { importExpediaPropertySnapshot } from "../src/backend/liveValidation.js";
+import type { ImportedExpediaPropertySnapshot } from "../src/backend/types.js";
 
 export const importRuntimeBundle = mutationGeneric({
   args: {
@@ -61,6 +63,106 @@ export const importFacetClassifierArtifact = mutationGeneric({
       version: artifact.version,
       runtimeFacets: artifact.runtimeFacets.length,
       vocabularySize: artifact.terms.length,
+    };
+  },
+});
+
+export const importExpediaSubset = mutationGeneric({
+  args: {
+    properties: v.array(v.any()),
+  },
+  handler: async (ctx, args) => {
+    const store = createConvexStore(ctx.db);
+    const classifierDoc = await ctx.db
+      .query("mlRuntimeArtifacts")
+      .withIndex("by_artifact_type", (q) => q.eq("artifactType", "facet_classifier"))
+      .unique();
+    const classifierArtifact = classifierDoc
+      ? normalizeFacetClassifierArtifact(classifierDoc)
+      : undefined;
+
+    let imported = 0;
+    for (const raw of args.properties) {
+      await importExpediaPropertySnapshot(
+        store,
+        raw as ImportedExpediaPropertySnapshot,
+        classifierArtifact,
+      );
+      imported += 1;
+    }
+    return {
+      importedProperties: imported,
+    };
+  },
+});
+
+export const clearSourceDataset = mutationGeneric({
+  args: {},
+  handler: async (ctx) => {
+    const [properties, reviews] = await Promise.all([
+      ctx.db.query("sourceProperties").collect(),
+      ctx.db.query("sourceReviews").collect(),
+    ]);
+    for (const doc of properties) {
+      await ctx.db.delete(doc._id);
+    }
+    for (const doc of reviews) {
+      await ctx.db.delete(doc._id);
+    }
+    return {
+      deletedProperties: properties.length,
+      deletedReviews: reviews.length,
+    };
+  },
+});
+
+export const clearSourceDatasetBatch = mutationGeneric({
+  args: {
+    limit: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const [properties, reviews] = await Promise.all([
+      ctx.db.query("sourceProperties").take(args.limit),
+      ctx.db.query("sourceReviews").take(args.limit),
+    ]);
+    for (const doc of properties) {
+      await ctx.db.delete(doc._id);
+    }
+    for (const doc of reviews) {
+      await ctx.db.delete(doc._id);
+    }
+    return {
+      deletedProperties: properties.length,
+      deletedReviews: reviews.length,
+      done: properties.length === 0 && reviews.length === 0,
+    };
+  },
+});
+
+export const importSourcePropertiesBatch = mutationGeneric({
+  args: {
+    properties: v.array(v.any()),
+  },
+  handler: async (ctx, args) => {
+    for (const property of args.properties) {
+      await ctx.db.insert("sourceProperties", property);
+    }
+    return {
+      importedProperties: args.properties.length,
+    };
+  },
+});
+
+export const importSourceReviewsBatch = mutationGeneric({
+  args: {
+    reviews: v.array(v.any()),
+  },
+  handler: async (ctx, args) => {
+    for (const review of args.reviews) {
+      await ctx.db.insert("sourceReviews", review);
+    }
+    return {
+      importedReviews: args.reviews.length,
     };
   },
 });

@@ -10,19 +10,82 @@ import {
 export const listDemoProperties = queryGeneric({
   args: {},
   handler: async (ctx) => {
-    const docs = await ctx.db.query("properties").collect();
-    return docs
-      .filter((doc) => (doc.demoFlags ?? []).includes("demo"))
-      .sort((left, right) => String(left.demoScenario ?? "").localeCompare(String(right.demoScenario ?? "")))
-      .map((doc) => ({
-        propertyId: doc.propertyId,
-        ...(doc.city ? { city: doc.city } : {}),
-        ...(doc.province ? { province: doc.province } : {}),
-        ...(doc.country ? { country: doc.country } : {}),
-        propertySummary: doc.propertySummary,
-        demoFlags: doc.demoFlags ?? [],
-        ...(doc.demoScenario ? { demoScenario: doc.demoScenario } : {}),
-      }));
+    const [sourceDocs, runtimeDocs, reviewDocs] = await Promise.all([
+      ctx.db.query("sourceProperties").collect(),
+      ctx.db.query("properties").collect(),
+      ctx.db.query("sourceReviews").collect(),
+    ]);
+
+    const runtimeByPropertyId = new Map(
+      runtimeDocs.map((doc) => [doc.propertyId, doc] as const),
+    );
+    const reviewCountByPropertyId = new Map<string, number>();
+    for (const review of reviewDocs) {
+      reviewCountByPropertyId.set(
+        review.propertyId,
+        (reviewCountByPropertyId.get(review.propertyId) ?? 0) + 1,
+      );
+    }
+
+    return sourceDocs
+      .map((sourceDoc) => {
+        const runtimeDoc = runtimeByPropertyId.get(sourceDoc.propertyId);
+        return {
+          propertyId: sourceDoc.propertyId,
+          ...(sourceDoc.city ? { city: sourceDoc.city } : {}),
+          ...(sourceDoc.province ? { province: sourceDoc.province } : {}),
+          ...(sourceDoc.country ? { country: sourceDoc.country } : {}),
+          ...(parseOptionalNumber(sourceDoc.starRating) !== undefined
+            ? { starRating: parseOptionalNumber(sourceDoc.starRating) }
+            : {}),
+          ...(runtimeDoc?.guestRating !== undefined
+            ? { guestRating: runtimeDoc.guestRating }
+            : parseOptionalNumber(sourceDoc.guestRatingAvgExpedia) !== undefined
+              ? { guestRating: parseOptionalNumber(sourceDoc.guestRatingAvgExpedia) }
+              : {}),
+          propertySummary:
+            runtimeDoc?.propertySummary ?? buildSourcePropertySummary(sourceDoc),
+          ...(runtimeDoc?.popularAmenities ?? sourceDoc.popularAmenitiesList
+            ? {
+                popularAmenities:
+                  runtimeDoc?.popularAmenities ??
+                  normalizeText(sourceDoc.popularAmenitiesList),
+              }
+            : {}),
+          reviewCount: reviewCountByPropertyId.get(sourceDoc.propertyId) ?? 0,
+          demoFlags: runtimeDoc?.demoFlags ?? [],
+          ...(runtimeDoc?.demoScenario ? { demoScenario: runtimeDoc.demoScenario } : {}),
+          ...(runtimeDoc?.sourceVendor ? { sourceVendor: runtimeDoc.sourceVendor } : {}),
+          ...(runtimeDoc?.sourceUrl ? { sourceUrl: runtimeDoc.sourceUrl } : {}),
+          ...(runtimeDoc?.lastValidatedAt ? { lastValidatedAt: runtimeDoc.lastValidatedAt } : {}),
+          ...(runtimeDoc?.validationStatus
+            ? { validationStatus: runtimeDoc.validationStatus }
+            : {}),
+          ...(typeof runtimeDoc?.liveReviewCount === "number"
+            ? { liveReviewCount: runtimeDoc.liveReviewCount }
+            : {}),
+        };
+      })
+      .sort((left, right) => {
+        const leftDemo = left.demoFlags.includes("demo") ? 0 : 1;
+        const rightDemo = right.demoFlags.includes("demo") ? 0 : 1;
+        if (leftDemo !== rightDemo) {
+          return leftDemo - rightDemo;
+        }
+        return String(left.city ?? left.propertyId).localeCompare(
+          String(right.city ?? right.propertyId),
+        );
+      });
+  },
+});
+
+export const getPropertyValidationState = queryGeneric({
+  args: {
+    propertyId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const store = createConvexStore(ctx.db);
+    return store.getPropertyValidationState(args.propertyId);
   },
 });
 
@@ -46,3 +109,34 @@ export const getSessionSummary = queryGeneric({
     return getSessionSummaryService(store, args.sessionId);
   },
 });
+
+function buildSourcePropertySummary(sourceDoc: {
+  city: string;
+  province: string;
+  country: string;
+  propertyDescription: string;
+  areaDescription: string;
+}): string {
+  const location = [sourceDoc.city, sourceDoc.province, sourceDoc.country]
+    .map(normalizeText)
+    .filter((value): value is string => Boolean(value))
+    .join(", ");
+  const description =
+    normalizeText(sourceDoc.propertyDescription) ??
+    normalizeText(sourceDoc.areaDescription) ??
+    "Seeded from the source dataset.";
+  return [location, description].filter(Boolean).join(". ");
+}
+
+function normalizeText(value: string | undefined): string | undefined {
+  const text = value?.replace(/\s+/g, " ").trim();
+  return text ? text : undefined;
+}
+
+function parseOptionalNumber(value: string | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}

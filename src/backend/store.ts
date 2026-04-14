@@ -1,19 +1,30 @@
 import type {
+  LiveReviewSample,
   PropertyEvidenceUpdate,
   PropertyFacetEvidence,
+  PropertyFacetLiveSignal,
   PropertyFacetMetric,
   PropertyRecord,
+  PropertyValidationState,
   StoredFollowUpAnswer,
   StoredFollowUpQuestion,
   StoredReviewSession,
 } from "./types.js";
+import { applyLiveSignalToMetric } from "./scoring.js";
 
 export interface ReviewGapStore {
   now(): string;
   getProperty(propertyId: string): Promise<PropertyRecord | null>;
   upsertProperty(property: PropertyRecord): Promise<void>;
+  patchProperty(propertyId: string, patch: Partial<PropertyRecord>): Promise<PropertyRecord>;
+  getPropertyValidationState(propertyId: string): Promise<PropertyValidationState | null>;
   listPropertyFacetMetrics(propertyId: string): Promise<PropertyFacetMetric[]>;
   upsertPropertyFacetMetric(metric: PropertyFacetMetric): Promise<void>;
+  listPropertyFacetLiveSignals(propertyId: string): Promise<PropertyFacetLiveSignal[]>;
+  replacePropertyFacetLiveSignals(
+    propertyId: string,
+    signals: PropertyFacetLiveSignal[],
+  ): Promise<void>;
   listPropertyFacetEvidence(
     propertyId: string,
     facet?: PropertyFacetMetric["facet"],
@@ -22,6 +33,17 @@ export interface ReviewGapStore {
     propertyId: string,
     facet: PropertyFacetMetric["facet"],
     evidence: PropertyFacetEvidence[],
+  ): Promise<void>;
+  replacePropertyFacetVendorEvidence(
+    propertyId: string,
+    facet: PropertyFacetMetric["facet"],
+    vendor: "expedia",
+    evidence: PropertyFacetEvidence[],
+  ): Promise<void>;
+  listPropertyLiveReviews(propertyId: string): Promise<LiveReviewSample[]>;
+  replacePropertyLiveReviews(
+    propertyId: string,
+    reviews: LiveReviewSample[],
   ): Promise<void>;
   createReviewSession(
     session: Omit<StoredReviewSession, "id">,
@@ -52,7 +74,9 @@ export interface ReviewGapStore {
 export class InMemoryReviewGapStore implements ReviewGapStore {
   private readonly properties = new Map<string, PropertyRecord>();
   private readonly metrics = new Map<string, PropertyFacetMetric>();
+  private readonly liveSignals = new Map<string, PropertyFacetLiveSignal>();
   private readonly evidence = new Map<string, PropertyFacetEvidence>();
+  private readonly liveReviews = new Map<string, LiveReviewSample>();
   private readonly sessions = new Map<string, StoredReviewSession>();
   private readonly questions = new Map<string, StoredFollowUpQuestion>();
   private readonly answers = new Map<string, StoredFollowUpAnswer>();
@@ -76,12 +100,78 @@ export class InMemoryReviewGapStore implements ReviewGapStore {
     this.properties.set(property.propertyId, property);
   }
 
+  async patchProperty(
+    propertyId: string,
+    patch: Partial<PropertyRecord>,
+  ): Promise<PropertyRecord> {
+    const existing = this.properties.get(propertyId);
+    if (!existing) {
+      throw new Error(`Unknown property ${propertyId}`);
+    }
+    const next: PropertyRecord = {
+      ...existing,
+      ...patch,
+      facetListingTexts: {
+        ...existing.facetListingTexts,
+        ...(patch.facetListingTexts ?? {}),
+      },
+      demoFlags: patch.demoFlags ?? existing.demoFlags,
+    };
+    this.properties.set(propertyId, next);
+    return next;
+  }
+
+  async getPropertyValidationState(
+    propertyId: string,
+  ): Promise<PropertyValidationState | null> {
+    const property = this.properties.get(propertyId);
+    if (!property) {
+      return null;
+    }
+    return {
+      propertyId,
+      sourceVendor: property.sourceVendor,
+      sourceUrl: property.sourceUrl,
+      lastValidatedAt: property.lastValidatedAt,
+      validationStatus: property.validationStatus ?? "idle",
+      liveReviewCount: property.liveReviewCount ?? 0,
+    };
+  }
+
   async listPropertyFacetMetrics(propertyId: string): Promise<PropertyFacetMetric[]> {
-    return [...this.metrics.values()].filter((metric) => metric.propertyId === propertyId);
+    return [...this.metrics.values()]
+      .filter((metric) => metric.propertyId === propertyId)
+      .map((metric) =>
+        applyLiveSignalToMetric(
+          metric,
+          this.liveSignals.get(metricKey(metric.propertyId, metric.facet)),
+        ),
+      );
   }
 
   async upsertPropertyFacetMetric(metric: PropertyFacetMetric): Promise<void> {
     this.metrics.set(metricKey(metric.propertyId, metric.facet), metric);
+  }
+
+  async listPropertyFacetLiveSignals(
+    propertyId: string,
+  ): Promise<PropertyFacetLiveSignal[]> {
+    return [...this.liveSignals.values()].filter((signal) => signal.propertyId === propertyId);
+  }
+
+  async replacePropertyFacetLiveSignals(
+    propertyId: string,
+    signals: PropertyFacetLiveSignal[],
+  ): Promise<void> {
+    for (const key of [...this.liveSignals.keys()]) {
+      const signal = this.liveSignals.get(key);
+      if (signal?.propertyId === propertyId) {
+        this.liveSignals.delete(key);
+      }
+    }
+    for (const signal of signals) {
+      this.liveSignals.set(metricKey(signal.propertyId, signal.facet), signal);
+    }
   }
 
   async listPropertyFacetEvidence(
@@ -106,6 +196,49 @@ export class InMemoryReviewGapStore implements ReviewGapStore {
     }
     for (const item of evidence) {
       this.evidence.set(evidenceKey(item), item);
+    }
+  }
+
+  async replacePropertyFacetVendorEvidence(
+    propertyId: string,
+    facet: PropertyFacetMetric["facet"],
+    vendor: "expedia",
+    evidence: PropertyFacetEvidence[],
+  ): Promise<void> {
+    for (const key of [...this.evidence.keys()]) {
+      const item = this.evidence.get(key);
+      if (
+        item &&
+        item.propertyId === propertyId &&
+        item.facet === facet &&
+        item.sourceType.startsWith(`${vendor}_`)
+      ) {
+        this.evidence.delete(key);
+      }
+    }
+    for (const item of evidence) {
+      this.evidence.set(evidenceKey(item), item);
+    }
+  }
+
+  async listPropertyLiveReviews(propertyId: string): Promise<LiveReviewSample[]> {
+    return [...this.liveReviews.values()]
+      .filter((review) => review.propertyId === propertyId)
+      .sort((left, right) => left.reviewIdHash.localeCompare(right.reviewIdHash));
+  }
+
+  async replacePropertyLiveReviews(
+    propertyId: string,
+    reviews: LiveReviewSample[],
+  ): Promise<void> {
+    for (const key of [...this.liveReviews.keys()]) {
+      const review = this.liveReviews.get(key);
+      if (review?.propertyId === propertyId) {
+        this.liveReviews.delete(key);
+      }
+    }
+    for (const review of reviews) {
+      this.liveReviews.set(reviewKey(review), review);
     }
   }
 
@@ -195,6 +328,10 @@ function metricKey(propertyId: string, facet: string): string {
 
 function evidenceKey(evidence: PropertyFacetEvidence): string {
   return `${evidence.propertyId}:${evidence.facet}:${evidence.sourceType}:${evidence.snippet}`;
+}
+
+function reviewKey(review: LiveReviewSample): string {
+  return `${review.propertyId}:${review.reviewIdHash}`;
 }
 
 function latestBySession<T extends { sessionId: string; createdAt: string }>(

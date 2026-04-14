@@ -36,6 +36,51 @@ const scoreBreakdownValidator = v.object({
 });
 
 export default defineSchema({
+  sourceProperties: defineTable({
+    propertyId: v.string(),
+    guestRatingAvgExpedia: v.string(),
+    city: v.string(),
+    province: v.string(),
+    country: v.string(),
+    starRating: v.string(),
+    areaDescription: v.string(),
+    propertyDescription: v.string(),
+    popularAmenitiesList: v.string(),
+    propertyAmenityAccessibility: v.string(),
+    propertyAmenityActivitiesNearby: v.string(),
+    propertyAmenityBusinessServices: v.string(),
+    propertyAmenityConveniences: v.string(),
+    propertyAmenityFamilyFriendly: v.string(),
+    propertyAmenityFoodAndDrink: v.string(),
+    propertyAmenityGuestServices: v.string(),
+    propertyAmenityInternet: v.string(),
+    propertyAmenityLangsSpoken: v.string(),
+    propertyAmenityMore: v.string(),
+    propertyAmenityOutdoor: v.string(),
+    propertyAmenityParking: v.string(),
+    propertyAmenitySpa: v.string(),
+    propertyAmenityThingsToDo: v.string(),
+    checkInStartTime: v.string(),
+    checkInEndTime: v.string(),
+    checkOutTime: v.string(),
+    checkOutPolicy: v.string(),
+    petPolicy: v.string(),
+    childrenAndExtraBedPolicy: v.string(),
+    checkInInstructions: v.string(),
+    knowBeforeYouGo: v.string(),
+  }).index("by_property_id", ["propertyId"]),
+
+  sourceReviews: defineTable({
+    propertyId: v.string(),
+    acquisitionDate: v.string(),
+    lob: v.string(),
+    ratingJson: v.string(),
+    reviewTitle: v.string(),
+    reviewText: v.string(),
+  })
+    .index("by_property_id", ["propertyId"])
+    .index("by_property_id_and_acquisition_date", ["propertyId", "acquisitionDate"]),
+
   properties: defineTable({
     propertyId: v.string(),
     city: v.optional(v.string()),
@@ -53,6 +98,18 @@ export default defineSchema({
     ),
     demoScenario: v.optional(v.string()),
     demoFlags: v.array(v.string()),
+    sourceVendor: v.optional(v.literal("expedia")),
+    sourceUrl: v.optional(v.string()),
+    lastValidatedAt: v.optional(v.string()),
+    validationStatus: v.optional(
+      v.union(
+        v.literal("idle"),
+        v.literal("refreshing"),
+        v.literal("success"),
+        v.literal("error"),
+      ),
+    ),
+    liveReviewCount: v.optional(v.number()),
   }).index("by_property_id", ["propertyId"]),
 
   propertyFacetMetrics: defineTable({
@@ -76,6 +133,36 @@ export default defineSchema({
   propertyFacetEvidence: defineTable(evidenceValidator)
     .index("by_property_id", ["propertyId"])
     .index("by_property_id_facet", ["propertyId", "facet"]),
+
+  propertyLiveReviews: defineTable({
+    propertyId: v.string(),
+    sourceVendor: v.literal("expedia"),
+    sourceUrl: v.string(),
+    reviewIdHash: v.string(),
+    headline: v.optional(v.string()),
+    text: v.string(),
+    rating: v.optional(v.number()),
+    reviewDate: v.optional(v.string()),
+    reviewerType: v.optional(v.string()),
+    fetchedAt: v.string(),
+  })
+    .index("by_property_id", ["propertyId"])
+    .index("by_property_id_and_review_id_hash", ["propertyId", "reviewIdHash"]),
+
+  propertyFacetLiveSignals: defineTable({
+    propertyId: v.string(),
+    facet: v.string(),
+    mentionRate: v.number(),
+    conflictScore: v.number(),
+    latestReviewDate: v.optional(v.string()),
+    daysSince: v.number(),
+    listingTextPresent: v.boolean(),
+    reviewCountSampled: v.number(),
+    supportSnippetCount: v.number(),
+    fetchedAt: v.string(),
+  })
+    .index("by_property_id", ["propertyId"])
+    .index("by_property_id_and_facet", ["propertyId", "facet"]),
 
   reviewSessions: defineTable({
     propertyId: v.string(),

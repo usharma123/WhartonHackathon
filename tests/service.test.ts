@@ -260,4 +260,90 @@ describe("session flow", () => {
     expect(summary.extractedFacts.length).toBeGreaterThan(0);
     expect(summary.accumulatedEvidenceUpdates.length).toBeGreaterThan(0);
   });
+
+  it("lets live facet signals change the next selected question without rewriting base metrics", async () => {
+    const store = new InMemoryReviewGapStore();
+    await store.upsertProperty({
+      propertyId: "live_override",
+      propertySummary: "Synthetic live override property",
+      facetListingTexts: {
+        check_in: "Check-in starts at 4pm",
+        amenities_breakfast: "Breakfast buffet is available daily",
+      },
+      demoFlags: [],
+    });
+    await store.upsertPropertyFacetMetric({
+      propertyId: "live_override",
+      facet: "check_in",
+      importance: 0.95,
+      threshold: 0.45,
+      reliabilityClass: "high",
+      daysSince: 340,
+      stalenessScore: 0.93,
+      mentionRate: 0.01,
+      matchedReviewRate: 0.04,
+      meanCosMatchedReviews: 0.31,
+      validatedConflictCount: 1,
+      validatedConflictScore: 0.05,
+      listingTextPresent: true,
+    });
+    await store.upsertPropertyFacetMetric({
+      propertyId: "live_override",
+      facet: "amenities_breakfast",
+      importance: 0.9,
+      threshold: 0.4,
+      reliabilityClass: "high",
+      daysSince: 210,
+      stalenessScore: 0.58,
+      mentionRate: 0.03,
+      matchedReviewRate: 0.04,
+      meanCosMatchedReviews: 0.34,
+      validatedConflictCount: 1,
+      validatedConflictScore: 0.02,
+      listingTextPresent: true,
+    });
+
+    const beforeSession = await createReviewSession(store, { propertyId: "live_override" });
+    const beforeQuestion = await selectNextQuestion(store, undefined, {
+      sessionId: beforeSession.sessionId,
+      draftReview: "Quiet room and friendly staff.",
+    });
+    expect(beforeQuestion.facet).toBe("check_in");
+
+    await store.replacePropertyFacetLiveSignals("live_override", [
+      {
+        propertyId: "live_override",
+        facet: "check_in",
+        mentionRate: 0.5,
+        conflictScore: 0,
+        latestReviewDate: "2026-04-10",
+        daysSince: 4,
+        listingTextPresent: true,
+        reviewCountSampled: 8,
+        supportSnippetCount: 4,
+        fetchedAt: "2026-04-14T00:00:00.000Z",
+      },
+      {
+        propertyId: "live_override",
+        facet: "amenities_breakfast",
+        mentionRate: 0.02,
+        conflictScore: 0.25,
+        latestReviewDate: "2026-04-12",
+        daysSince: 2,
+        listingTextPresent: true,
+        reviewCountSampled: 8,
+        supportSnippetCount: 1,
+        fetchedAt: "2026-04-14T00:00:00.000Z",
+      },
+    ]);
+
+    const afterSession = await createReviewSession(store, { propertyId: "live_override" });
+    const afterQuestion = await selectNextQuestion(store, undefined, {
+      sessionId: afterSession.sessionId,
+      draftReview: "Quiet room and friendly staff.",
+    });
+
+    expect(afterQuestion.facet).toBe("amenities_breakfast");
+    expect((await store.listPropertyFacetLiveSignals("live_override")).length).toBe(2);
+  });
 });

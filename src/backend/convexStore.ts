@@ -1,13 +1,17 @@
 import type { ReviewGapStore } from "./store.js";
 import type {
+  LiveReviewSample,
   PropertyEvidenceUpdate,
   PropertyFacetEvidence,
+  PropertyFacetLiveSignal,
   PropertyFacetMetric,
   PropertyRecord,
+  PropertyValidationState,
   StoredFollowUpAnswer,
   StoredFollowUpQuestion,
   StoredReviewSession,
 } from "./types.js";
+import { applyLiveSignalToMetric } from "./scoring.js";
 
 type ConvexDb = any;
 
@@ -36,12 +40,71 @@ export function createConvexStore(db: ConvexDb): ReviewGapStore {
       await db.insert("properties", payload);
     },
 
+    async patchProperty(propertyId, patch) {
+      const existing = await db
+        .query("properties")
+        .withIndex("by_property_id", (q: any) => q.eq("propertyId", propertyId))
+        .unique();
+      if (!existing) {
+        throw new Error(`Unknown property ${propertyId}`);
+      }
+      const mergedListingTexts = {
+        ...Object.fromEntries(
+          (existing.facetListingTexts ?? []).map((entry: any) => [entry.facet, entry.text]),
+        ),
+        ...(patch.facetListingTexts ?? {}),
+      };
+      await db.patch(
+        existing._id,
+        propertyToDoc({
+          ...mapProperty(existing),
+          ...patch,
+          propertyId,
+          facetListingTexts: mergedListingTexts,
+          demoFlags: patch.demoFlags ?? existing.demoFlags ?? [],
+        }),
+      );
+      const updated = await db.get(existing._id);
+      if (!updated) {
+        throw new Error(`Missing property ${propertyId}`);
+      }
+      return mapProperty(updated);
+    },
+
+    async getPropertyValidationState(propertyId) {
+      const doc = await db
+        .query("properties")
+        .withIndex("by_property_id", (q: any) => q.eq("propertyId", propertyId))
+        .unique();
+      if (!doc) {
+        return null;
+      }
+      const property = mapProperty(doc);
+      return {
+        propertyId,
+        sourceVendor: property.sourceVendor,
+        sourceUrl: property.sourceUrl,
+        lastValidatedAt: property.lastValidatedAt,
+        validationStatus: property.validationStatus ?? "idle",
+        liveReviewCount: property.liveReviewCount ?? 0,
+      } satisfies PropertyValidationState;
+    },
+
     async listPropertyFacetMetrics(propertyId) {
       const docs = await db
         .query("propertyFacetMetrics")
         .withIndex("by_property_id", (q: any) => q.eq("propertyId", propertyId))
         .collect();
-      return docs.map(mapMetric);
+      const liveSignals = await db
+        .query("propertyFacetLiveSignals")
+        .withIndex("by_property_id", (q: any) => q.eq("propertyId", propertyId))
+        .collect();
+      const liveByFacet = new Map<string, PropertyFacetLiveSignal>(
+        liveSignals.map((signal: any) => [signal.facet, mapLiveSignal(signal)]),
+      );
+      return docs.map((doc: any) =>
+        applyLiveSignalToMetric(mapMetric(doc), liveByFacet.get(doc.facet)),
+      );
     },
 
     async upsertPropertyFacetMetric(metric) {
@@ -56,6 +119,27 @@ export function createConvexStore(db: ConvexDb): ReviewGapStore {
         return;
       }
       await db.insert("propertyFacetMetrics", metric);
+    },
+
+    async listPropertyFacetLiveSignals(propertyId) {
+      const docs = await db
+        .query("propertyFacetLiveSignals")
+        .withIndex("by_property_id", (q: any) => q.eq("propertyId", propertyId))
+        .collect();
+      return docs.map(mapLiveSignal);
+    },
+
+    async replacePropertyFacetLiveSignals(propertyId, signals) {
+      const existing = await db
+        .query("propertyFacetLiveSignals")
+        .withIndex("by_property_id", (q: any) => q.eq("propertyId", propertyId))
+        .collect();
+      for (const row of existing) {
+        await db.delete(row._id);
+      }
+      for (const signal of signals) {
+        await db.insert("propertyFacetLiveSignals", signal);
+      }
     },
 
     async listPropertyFacetEvidence(propertyId, facet) {
@@ -90,6 +174,44 @@ export function createConvexStore(db: ConvexDb): ReviewGapStore {
       }
       for (const item of evidence) {
         await db.insert("propertyFacetEvidence", item);
+      }
+    },
+
+    async replacePropertyFacetVendorEvidence(propertyId, facet, vendor, evidence) {
+      const existing = await db
+        .query("propertyFacetEvidence")
+        .withIndex("by_property_id_facet", (q: any) =>
+          q.eq("propertyId", propertyId).eq("facet", facet),
+        )
+        .collect();
+      for (const row of existing) {
+        if (String(row.sourceType).startsWith(`${vendor}_`)) {
+          await db.delete(row._id);
+        }
+      }
+      for (const item of evidence) {
+        await db.insert("propertyFacetEvidence", item);
+      }
+    },
+
+    async listPropertyLiveReviews(propertyId) {
+      const docs = await db
+        .query("propertyLiveReviews")
+        .withIndex("by_property_id", (q: any) => q.eq("propertyId", propertyId))
+        .collect();
+      return docs.map(mapLiveReview);
+    },
+
+    async replacePropertyLiveReviews(propertyId, reviews) {
+      const existing = await db
+        .query("propertyLiveReviews")
+        .withIndex("by_property_id", (q: any) => q.eq("propertyId", propertyId))
+        .collect();
+      for (const row of existing) {
+        await db.delete(row._id);
+      }
+      for (const review of reviews) {
+        await db.insert("propertyLiveReviews", review);
       }
     },
 
@@ -183,6 +305,11 @@ function propertyToDoc(property: PropertyRecord) {
     })),
     demoScenario: property.demoScenario,
     demoFlags: property.demoFlags,
+    sourceVendor: property.sourceVendor,
+    sourceUrl: property.sourceUrl,
+    lastValidatedAt: property.lastValidatedAt,
+    validationStatus: property.validationStatus,
+    liveReviewCount: property.liveReviewCount,
   });
 }
 
@@ -207,6 +334,11 @@ function mapProperty(doc: any): PropertyRecord {
     ),
     demoScenario: doc.demoScenario ?? undefined,
     demoFlags: doc.demoFlags ?? [],
+    sourceVendor: doc.sourceVendor ?? undefined,
+    sourceUrl: doc.sourceUrl ?? undefined,
+    lastValidatedAt: doc.lastValidatedAt ?? undefined,
+    validationStatus: doc.validationStatus ?? undefined,
+    liveReviewCount: doc.liveReviewCount ?? undefined,
   };
 }
 
@@ -236,6 +368,36 @@ function mapEvidence(doc: any): PropertyFacetEvidence {
     snippet: doc.snippet,
     acquisitionDate: doc.acquisitionDate ?? undefined,
     evidenceScore: doc.evidenceScore ?? undefined,
+  };
+}
+
+function mapLiveSignal(doc: any): PropertyFacetLiveSignal {
+  return {
+    propertyId: doc.propertyId,
+    facet: doc.facet,
+    mentionRate: doc.mentionRate,
+    conflictScore: doc.conflictScore,
+    latestReviewDate: doc.latestReviewDate ?? undefined,
+    daysSince: doc.daysSince,
+    listingTextPresent: doc.listingTextPresent,
+    reviewCountSampled: doc.reviewCountSampled,
+    supportSnippetCount: doc.supportSnippetCount,
+    fetchedAt: doc.fetchedAt,
+  };
+}
+
+function mapLiveReview(doc: any): LiveReviewSample {
+  return {
+    propertyId: doc.propertyId,
+    sourceVendor: doc.sourceVendor,
+    sourceUrl: doc.sourceUrl,
+    reviewIdHash: doc.reviewIdHash,
+    headline: doc.headline ?? undefined,
+    text: doc.text,
+    rating: doc.rating ?? undefined,
+    reviewDate: doc.reviewDate ?? undefined,
+    reviewerType: doc.reviewerType ?? undefined,
+    fetchedAt: doc.fetchedAt,
   };
 }
 

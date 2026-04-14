@@ -1,0 +1,152 @@
+[
+  {
+    "propertyId": "expedia_ny_01",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-Grand-Hyatt-New-York.h23677.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_02",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-Hotel-Edison-Times-Square.h6260.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_03",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-Sheraton-New-York-Times-Square-Hotel.h87.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_04",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-DoubleTree-By-Hilton-New-York-Downtown.h3859014.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_05",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-The-New-Yorker-A-Wyndham-Hotel.h41009.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_06",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-Paramount-Times-Square.h24245.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_07",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-Millennium-Hotel-Broadway-Times-Square.h25449.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_08",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-HYATT-REGENCY-TIMES-SQUARE.h24954.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_09",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-Lotte-New-York-Palace.h4818.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_10",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-PUBLIC.h17117062.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_11",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-Park-Central-Hotel-New-York.h4164.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_12",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-Hilton-Garden-Inn-New-York-Times-Square-South.h17432204.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_13",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-Arlo-Midtown.h48669360.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_14",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-Hampton-Inn-New-York-Times-Square.h91827910.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_15",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-Pod-Times-Square.h19681371.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_16",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-Margaritaville-Resort-Times-Square.h66525849.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_17",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-Hotel-St-James.h1144474.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_18",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-Doubletree-By-Hilton-New-York-Times-Square-South.h36712878.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_19",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-The-Lexington-Hotel.h20288.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_20",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-Empire-Hotel.h3670.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_21",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-The-Manhattan-At-Times-Square-Hotel.h7498.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_22",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-Moxy-NYC-Times-Square.h17924434.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_23",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-Hard-Rock-Hotel-New-York.h74799455.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_24",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-OYO-Times-Square.h6697.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  },
+  {
+    "propertyId": "expedia_ny_25",
+    "expediaUrl": "https://www.expedia.com/New-York-Hotels-Moxy-NYC-Chelsea.h24322038.Hotel-Information",
+    "demoFlags": ["demo", "expedia_seed"],
+    "demoScenario": "expedia_seed"
+  }
+]

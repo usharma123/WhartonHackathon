@@ -8,10 +8,45 @@ export const getProperty = internalQueryGeneric({
   handler: async (ctx, args) => createConvexStore(ctx.db).getProperty(args.propertyId),
 });
 
+export const upsertProperty = internalMutationGeneric({
+  args: { property: v.any() },
+  handler: async (ctx, args) => createConvexStore(ctx.db).upsertProperty(args.property),
+});
+
+export const patchProperty = internalMutationGeneric({
+  args: { propertyId: v.string(), patch: v.any() },
+  handler: async (ctx, args) =>
+    createConvexStore(ctx.db).patchProperty(args.propertyId, args.patch),
+});
+
+export const getPropertyValidationState = internalQueryGeneric({
+  args: { propertyId: v.string() },
+  handler: async (ctx, args) =>
+    createConvexStore(ctx.db).getPropertyValidationState(args.propertyId),
+});
+
 export const listPropertyFacetMetrics = internalQueryGeneric({
   args: { propertyId: v.string() },
   handler: async (ctx, args) =>
     createConvexStore(ctx.db).listPropertyFacetMetrics(args.propertyId),
+});
+
+export const upsertPropertyFacetMetric = internalMutationGeneric({
+  args: { metric: v.any() },
+  handler: async (ctx, args) =>
+    createConvexStore(ctx.db).upsertPropertyFacetMetric(args.metric),
+});
+
+export const listPropertyFacetLiveSignals = internalQueryGeneric({
+  args: { propertyId: v.string() },
+  handler: async (ctx, args) =>
+    createConvexStore(ctx.db).listPropertyFacetLiveSignals(args.propertyId),
+});
+
+export const replacePropertyFacetLiveSignals = internalMutationGeneric({
+  args: { propertyId: v.string(), signals: v.array(v.any()) },
+  handler: async (ctx, args) =>
+    createConvexStore(ctx.db).replacePropertyFacetLiveSignals(args.propertyId, args.signals),
 });
 
 export const listPropertyFacetEvidence = internalQueryGeneric({
@@ -65,6 +100,28 @@ export const appendPropertyEvidenceUpdates = internalMutationGeneric({
   args: { updates: v.array(v.any()) },
   handler: async (ctx, args) =>
     createConvexStore(ctx.db).appendPropertyEvidenceUpdates(args.updates),
+});
+
+export const replacePropertyFacetVendorEvidence = internalMutationGeneric({
+  args: {
+    propertyId: v.string(),
+    facet: v.string(),
+    vendor: v.literal("expedia"),
+    evidence: v.array(v.any()),
+  },
+  handler: async (ctx, args) =>
+    createConvexStore(ctx.db).replacePropertyFacetVendorEvidence(
+      args.propertyId,
+      args.facet as any,
+      args.vendor,
+      args.evidence,
+    ),
+});
+
+export const replacePropertyLiveReviews = internalMutationGeneric({
+  args: { propertyId: v.string(), reviews: v.array(v.any()) },
+  handler: async (ctx, args) =>
+    createConvexStore(ctx.db).replacePropertyLiveReviews(args.propertyId, args.reviews),
 });
 
 export const listPropertyEvidenceUpdatesBySession = internalQueryGeneric({

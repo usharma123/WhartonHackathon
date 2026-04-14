@@ -37,6 +37,25 @@ This imports:
 - the runtime bundle from `EDA/data_artifacts/runtime/reviewgap_runtime_bundle.json`
 - the ML classifier artifact from `EDA/data_artifacts/runtime/review_classifier_artifact.json`
 
+### Offline Expedia subset ingest
+
+For a curated `25-50` property batch:
+
+1. Copy `data/expedia_subset.example.json` to `data/expedia_subset.json` and fill in real Expedia hotel URLs.
+2. Scrape and extract an artifact with Firecrawl + OpenAI:
+
+```bash
+pnpm run scrape:expedia -- --manifest data/expedia_subset.json --limit 25
+```
+
+3. Seed the extracted subset into Convex:
+
+```bash
+pnpm run seed:expedia -- --artifact data/expedia_subset_artifact.json
+```
+
+The scraper writes a success report into the artifact so you can decide whether to expand past the first batch.
+
 ### Optional OpenAI setup
 
 Copy `.env.local.example` to `.env.local` only if you need to wire values manually, then set:
