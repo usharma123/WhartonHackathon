@@ -10,8 +10,11 @@ import type {
   PropertyFacetEvidence,
   PropertyRecord,
   ReviewAnalysisResult,
+  SourceDiagnostics,
   StructuredFact,
 } from "./types.js";
+import type { FacetClassifierArtifact } from "./ml.js";
+import { predictFacetMentions } from "./ml.js";
 
 export interface ReviewGapAIClient {
   analyzeReview(input: {
@@ -38,29 +41,74 @@ export async function analyzeReviewWithFallback(
     draftReview: string;
     eligibleFacets: RuntimeFacet[];
     property: PropertyRecord;
+    classifierArtifact?: FacetClassifierArtifact;
   },
 ): Promise<ReviewAnalysisResult> {
   const fallback = analyzeReviewFallback({
     draftReview: input.draftReview,
     eligibleFacets: input.eligibleFacets,
   });
+  const mlPrediction = input.classifierArtifact
+    ? predictFacetMentions(input.classifierArtifact, input.draftReview)
+    : null;
+  const mlMentionProbByFacet = filterProbabilities(
+    mlPrediction?.mentionProbabilities ?? {},
+    input.eligibleFacets,
+  );
+  const mlLikelyKnownByFacet = filterProbabilities(
+    mlPrediction?.likelyKnownProbabilities ?? {},
+    input.eligibleFacets,
+  );
+  const mlMentioned = mlPrediction
+    ? mlPrediction.mentionedFacets.filter((facet) => input.eligibleFacets.includes(facet))
+    : [];
+  const mlLikelyKnown = mlPrediction
+    ? mlPrediction.likelyKnownFacets.filter((facet) => input.eligibleFacets.includes(facet))
+    : [];
   if (!client) {
-    return fallback;
+    return {
+      ...fallback,
+      mentionedFacets: mlMentioned.length > 0 ? mlMentioned : fallback.mentionedFacets,
+      likelyKnownFacets: mlLikelyKnown.length > 0 ? mlLikelyKnown : fallback.likelyKnownFacets,
+      mlMentionProbByFacet,
+      mlLikelyKnownByFacet,
+      usedML: Boolean(mlPrediction),
+    };
   }
   try {
-    const result = await client.analyzeReview(input);
+    const result = normalizeReviewAnalysisPayload(
+      await client.analyzeReview({
+        draftReview: input.draftReview,
+        eligibleFacets: input.eligibleFacets,
+        property: input.property,
+      }),
+      input.eligibleFacets,
+    );
     return {
-      mentionedFacets: dedupeFacetList(
-        result.mentionedFacets.filter((facet) => input.eligibleFacets.includes(facet)),
-      ),
-      likelyKnownFacets: dedupeFacetList(
-        result.likelyKnownFacets.filter((facet) => input.eligibleFacets.includes(facet)),
-      ),
+      mentionedFacets:
+        mlMentioned.length > 0
+          ? dedupeFacetList(mlMentioned)
+          : result.mentionedFacets,
+      likelyKnownFacets:
+        mlLikelyKnown.length > 0
+          ? dedupeFacetList(mlLikelyKnown)
+          : result.likelyKnownFacets,
       sentiment: result.sentiment,
+      mlMentionProbByFacet,
+      mlLikelyKnownByFacet,
+      usedML: Boolean(mlPrediction),
+      usedOpenAI: true,
       usedFallback: false,
     };
   } catch {
-    return fallback;
+    return {
+      ...fallback,
+      mentionedFacets: mlMentioned.length > 0 ? mlMentioned : fallback.mentionedFacets,
+      likelyKnownFacets: mlLikelyKnown.length > 0 ? mlLikelyKnown : fallback.likelyKnownFacets,
+      mlMentionProbByFacet,
+      mlLikelyKnownByFacet,
+      usedML: Boolean(mlPrediction),
+    };
   }
 }
 
@@ -101,14 +149,24 @@ export async function extractAnswerFactsWithFallback(
   try {
     const result = await client.extractAnswerFacts(input);
     return {
-      structuredFacts: result.structuredFacts,
-      confidence: result.confidence,
+      structuredFacts: normalizeStructuredFacts(result.structuredFacts, input.facet),
+      confidence: clampConfidence(result.confidence),
       usedFallback: false,
     };
   } catch {
     const fallback = extractAnswerFactsFallback(input);
     return { ...fallback, usedFallback: true };
   }
+}
+
+export function sourceDiagnostics(args: {
+  usedOpenAI: boolean;
+  usedFallback: boolean;
+}): SourceDiagnostics {
+  return {
+    usedOpenAI: args.usedOpenAI,
+    usedFallback: args.usedFallback,
+  };
 }
 
 export class OpenAIReviewGapClient implements ReviewGapAIClient {
@@ -186,4 +244,82 @@ export class OpenAIReviewGapClient implements ReviewGapAIClient {
 
 function dedupeFacetList(facets: RuntimeFacet[]): RuntimeFacet[] {
   return [...new Set(facets)];
+}
+
+function filterProbabilities(
+  probabilities: Partial<Record<RuntimeFacet, number>>,
+  eligibleFacets: RuntimeFacet[],
+): Partial<Record<RuntimeFacet, number>> {
+  return Object.fromEntries(
+    Object.entries(probabilities).filter(([facet]) =>
+      eligibleFacets.includes(facet as RuntimeFacet),
+    ),
+  ) as Partial<Record<RuntimeFacet, number>>;
+}
+
+function normalizeReviewAnalysisPayload(
+  payload: Partial<ReviewAnalysisResult> | undefined,
+  eligibleFacets: RuntimeFacet[],
+): Pick<ReviewAnalysisResult, "mentionedFacets" | "likelyKnownFacets" | "sentiment"> {
+  const mentionedFacets = dedupeFacetList(
+    asFacetList(payload?.mentionedFacets).filter((facet) => eligibleFacets.includes(facet)),
+  );
+  const likelyKnownFacets = dedupeFacetList(
+    asFacetList(payload?.likelyKnownFacets).filter((facet) => eligibleFacets.includes(facet)),
+  );
+  const sentiment = asSentiment(payload?.sentiment);
+  return {
+    mentionedFacets,
+    likelyKnownFacets,
+    sentiment,
+  };
+}
+
+function asFacetList(value: unknown): RuntimeFacet[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((facet): facet is RuntimeFacet => typeof facet === "string");
+}
+
+function asSentiment(value: unknown): ReviewAnalysisResult["sentiment"] {
+  if (
+    value === "positive" ||
+    value === "negative" ||
+    value === "mixed" ||
+    value === "neutral"
+  ) {
+    return value;
+  }
+  return "neutral";
+}
+
+function normalizeStructuredFacts(
+  facts: StructuredFact[] | undefined,
+  facet: RuntimeFacet,
+): StructuredFact[] {
+  if (!Array.isArray(facts)) {
+    return [];
+  }
+  return facts
+    .filter(
+      (fact) =>
+        fact &&
+        typeof fact.factType === "string" &&
+        fact.factType.trim().length > 0 &&
+        ["string", "number", "boolean"].includes(typeof fact.value),
+    )
+    .map((fact) => ({
+      facet,
+      factType: fact.factType.trim(),
+      value: fact.value,
+      confidence: clampConfidence(fact.confidence),
+    }));
+}
+
+function clampConfidence(value: unknown): number {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return 0.5;
+  }
+  return Math.min(1, Math.max(0, Math.round(value * 1000) / 1000));
 }

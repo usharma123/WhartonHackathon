@@ -1,0 +1,78 @@
+{
+  "generatedAt": "2026-04-14",
+  "shippingGatePassed": true,
+  "facets": [
+    {
+      "facet": "check_in",
+      "threshold": 0.6,
+      "trainingRows": 2302,
+      "validationRows": 524,
+      "positiveRate": 0.086,
+      "rocAuc": 0.9958,
+      "f1": 0.8857,
+      "precision": 0.8857,
+      "recall": 0.8857,
+      "shippingGatePassed": true
+    },
+    {
+      "facet": "check_out",
+      "threshold": 0.36,
+      "trainingRows": 2710,
+      "validationRows": 607,
+      "positiveRate": 0.0238,
+      "rocAuc": 0.9993,
+      "f1": 0.9565,
+      "precision": 1.0,
+      "recall": 0.9167,
+      "shippingGatePassed": true
+    },
+    {
+      "facet": "amenities_breakfast",
+      "threshold": 0.6,
+      "trainingRows": 2342,
+      "validationRows": 498,
+      "positiveRate": 0.082,
+      "rocAuc": 0.9913,
+      "f1": 0.8966,
+      "precision": 0.9559,
+      "recall": 0.8442,
+      "shippingGatePassed": true
+    },
+    {
+      "facet": "amenities_parking",
+      "threshold": 0.54,
+      "trainingRows": 2790,
+      "validationRows": 555,
+      "positiveRate": 0.0197,
+      "rocAuc": 0.9937,
+      "f1": 0.7586,
+      "precision": 0.7857,
+      "recall": 0.7333,
+      "shippingGatePassed": true
+    },
+    {
+      "facet": "know_before_you_go",
+      "threshold": 0.4,
+      "trainingRows": 2602,
+      "validationRows": 582,
+      "positiveRate": 0.0333,
+      "rocAuc": 0.9391,
+      "f1": 0.6383,
+      "precision": 0.5769,
+      "recall": 0.7143,
+      "shippingGatePassed": true
+    },
+    {
+      "facet": "amenities_pool",
+      "threshold": 0.44,
+      "trainingRows": 2740,
+      "validationRows": 631,
+      "positiveRate": 0.0314,
+      "rocAuc": 0.9862,
+      "f1": 0.8,
+      "precision": 1.0,
+      "recall": 0.6667,
+      "shippingGatePassed": true
+    }
+  ]
+}

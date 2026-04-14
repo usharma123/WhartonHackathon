@@ -3,7 +3,9 @@ import {
   analyzeReviewWithFallback,
   extractAnswerFactsWithFallback,
   generateQuestionWithFallback,
+  sourceDiagnostics,
 } from "./ai.js";
+import type { FacetClassifierArtifact } from "./ml.js";
 import type { RuntimeFacet } from "./facets.js";
 import { propertyCardDeltaSummary } from "./fallbacks.js";
 import { rankFacetMetrics } from "./scoring.js";
@@ -41,6 +43,11 @@ export async function createReviewSession(
     selectedFacet: null,
     mentionedFacets: [],
     likelyKnownFacets: [],
+    mlMentionProbByFacet: {},
+    mlLikelyKnownByFacet: {},
+    usedML: false,
+    usedOpenAI: false,
+    usedFallback: false,
     sentiment: "neutral",
     createdAt: now,
     updatedAt: now,
@@ -57,6 +64,7 @@ export async function analyzeDraftReview(
   store: ReviewGapStore,
   aiClient: ReviewGapAIClient | undefined,
   input: AnalyzeDraftReviewInput,
+  classifierArtifact?: FacetClassifierArtifact,
 ) {
   const session = await requireSession(store, input.sessionId);
   const property = await requireProperty(store, session.propertyId);
@@ -67,12 +75,18 @@ export async function analyzeDraftReview(
     draftReview: input.draftReview,
     eligibleFacets,
     property,
+    classifierArtifact,
   });
 
   await store.updateReviewSession(session.id, {
     draftReview: input.draftReview,
     mentionedFacets: analysis.mentionedFacets,
     likelyKnownFacets: analysis.likelyKnownFacets,
+    mlMentionProbByFacet: analysis.mlMentionProbByFacet,
+    mlLikelyKnownByFacet: analysis.mlLikelyKnownByFacet,
+    usedML: analysis.usedML,
+    usedOpenAI: analysis.usedOpenAI,
+    usedFallback: analysis.usedFallback,
     sentiment: analysis.sentiment,
     updatedAt: store.now(),
   });
@@ -84,13 +98,14 @@ export async function selectNextQuestion(
   store: ReviewGapStore,
   aiClient: ReviewGapAIClient | undefined,
   input: SelectNextQuestionInput,
+  classifierArtifact?: FacetClassifierArtifact,
 ): Promise<SelectNextQuestionResult> {
   const session = await requireSession(store, input.sessionId);
   const property = await requireProperty(store, session.propertyId);
   const analysis = await analyzeDraftReview(store, aiClient, {
     sessionId: session.id,
     draftReview: input.draftReview,
-  });
+  }, classifierArtifact);
   const metrics = await store.listPropertyFacetMetrics(session.propertyId);
   const ranked = rankFacetMetrics(metrics, analysis, {
     includeSecondaryFacets: input.includeSecondaryFacets ?? false,
@@ -109,6 +124,8 @@ export async function selectNextQuestion(
         "No eligible follow-up remained after the MVP allow-list, reliability, and coverage checks.",
       scoreBreakdown: null,
       supportingEvidence: [],
+      analysis,
+      questionSource: null,
       noFollowUp: true,
     };
   }
@@ -138,6 +155,8 @@ export async function selectNextQuestion(
     whyThisQuestion,
     scoreBreakdown: top.scoreBreakdown,
     supportingEvidence,
+    usedOpenAI: !question.usedFallback,
+    usedFallback: question.usedFallback,
     createdAt,
   });
 
@@ -151,10 +170,15 @@ export async function selectNextQuestion(
     facet: top.facet,
     questionText: question.questionText,
     voiceText: question.voiceText,
-    whyThisQuestion,
-    scoreBreakdown: top.scoreBreakdown,
-    supportingEvidence,
-    noFollowUp: false,
+      whyThisQuestion,
+      scoreBreakdown: top.scoreBreakdown,
+      supportingEvidence,
+      analysis,
+      questionSource: sourceDiagnostics({
+        usedOpenAI: !question.usedFallback,
+        usedFallback: question.usedFallback,
+      }),
+      noFollowUp: false,
   };
 }
 
@@ -178,6 +202,7 @@ export async function submitFollowUpAnswer(
     answerText: input.answerText,
     structuredFacts: extraction.structuredFacts,
     confidence: extraction.confidence,
+    usedOpenAI: !extraction.usedFallback,
     usedFallback: extraction.usedFallback,
     createdAt,
   });
@@ -210,6 +235,7 @@ export async function submitFollowUpAnswer(
       summary: propertyCardDeltaSummary(input.facet, extraction.structuredFacts),
       addedFacts: extraction.structuredFacts,
     },
+    usedOpenAI: !extraction.usedFallback,
     usedFallback: extraction.usedFallback,
   };
 }

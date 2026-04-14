@@ -4,18 +4,33 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc --noEmit",
+    "dev": "convex dev --local --typecheck disable --tail-logs always --start \"next dev\"",
+    "dev:web": "next dev",
+    "dev:convex": "convex dev --local --typecheck disable --tail-logs always",
+    "build": "next build",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "export:runtime": "python3 EDA/scripts/export_runtime_artifacts.py",
-    "check": "pnpm run build && pnpm run test"
+    "train:ml": "python3 EDA/scripts/train_review_classifier.py",
+    "build:artifacts": "python3 EDA/scripts/build_demo_artifacts.py",
+    "codegen": "convex codegen --typecheck disable",
+    "seed:demo": "node scripts/seed-demo.mjs",
+    "demo:live": "tsx scripts/live-review-demo.ts",
+    "check": "pnpm run typecheck && pnpm run test"
   },
   "dependencies": {
-    "convex": "^1.25.4",
-    "openai": "^4.104.0"
+    "convex": "^1.35.1",
+    "next": "^15.3.1",
+    "openai": "^6.34.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@types/node": "^24.6.0",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   }

@@ -54,6 +54,10 @@ export function analyzeReviewFallback(args: {
     mentionedFacets,
     likelyKnownFacets,
     sentiment: detectSentiment(text),
+    mlMentionProbByFacet: {},
+    mlLikelyKnownByFacet: {},
+    usedML: false,
+    usedOpenAI: false,
     usedFallback: true,
   };
 }

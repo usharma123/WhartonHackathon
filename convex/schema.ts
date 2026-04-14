@@ -12,6 +12,11 @@ const evidenceValidator = v.object({
   evidenceScore: v.optional(v.number()),
 });
 
+const probabilityEntryValidator = v.object({
+  facet: v.string(),
+  value: v.number(),
+});
+
 const structuredFactValidator = v.object({
   facet: v.string(),
   factType: v.string(),
@@ -78,6 +83,11 @@ export default defineSchema({
     selectedFacet: v.optional(v.string()),
     mentionedFacets: v.array(v.string()),
     likelyKnownFacets: v.array(v.string()),
+    mlMentionProbByFacet: v.array(probabilityEntryValidator),
+    mlLikelyKnownByFacet: v.array(probabilityEntryValidator),
+    usedML: v.boolean(),
+    usedOpenAI: v.boolean(),
+    usedFallback: v.boolean(),
     sentiment: v.string(),
     createdAt: v.string(),
     updatedAt: v.string(),
@@ -91,6 +101,8 @@ export default defineSchema({
     whyThisQuestion: v.string(),
     scoreBreakdown: scoreBreakdownValidator,
     supportingEvidence: v.array(evidenceValidator),
+    usedOpenAI: v.boolean(),
+    usedFallback: v.boolean(),
     createdAt: v.string(),
   }).index("by_session_id", ["sessionId"]),
 
@@ -100,6 +112,7 @@ export default defineSchema({
     answerText: v.string(),
     structuredFacts: v.array(structuredFactValidator),
     confidence: v.number(),
+    usedOpenAI: v.boolean(),
     usedFallback: v.boolean(),
     createdAt: v.string(),
   }).index("by_session_id", ["sessionId"]),
@@ -116,4 +129,46 @@ export default defineSchema({
   })
     .index("by_property_id_facet", ["propertyId", "facet"])
     .index("by_source_session_id", ["sourceSessionId"]),
+
+  mlRuntimeArtifacts: defineTable({
+    artifactType: v.string(),
+    version: v.string(),
+    generatedAt: v.string(),
+    tokenizer: v.object({
+      regex: v.string(),
+      minTokenLength: v.number(),
+      ngramRange: v.array(v.number()),
+      lowercase: v.boolean(),
+      stripAccents: v.boolean(),
+      l2Normalize: v.boolean(),
+    }),
+    runtimeFacets: v.array(v.string()),
+    vocabularyEntries: v.array(
+      v.object({
+        term: v.string(),
+        index: v.number(),
+      }),
+    ),
+    terms: v.array(v.string()),
+    idf: v.array(v.number()),
+    models: v.array(
+      v.object({
+        facet: v.string(),
+        intercept: v.number(),
+        threshold: v.number(),
+        coefficients: v.array(v.number()),
+        topPositiveTerms: v.array(v.string()),
+        topNegativeTerms: v.array(v.string()),
+        metrics: v.object({
+          trainingRows: v.number(),
+          validationRows: v.number(),
+          positiveRate: v.number(),
+          rocAuc: v.number(),
+          f1: v.number(),
+          precision: v.number(),
+          recall: v.number(),
+        }),
+      }),
+    ),
+  }).index("by_artifact_type", ["artifactType"]),
 });

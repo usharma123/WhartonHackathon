@@ -63,6 +63,15 @@ export interface ReviewAnalysisResult {
   mentionedFacets: RuntimeFacet[];
   likelyKnownFacets: RuntimeFacet[];
   sentiment: SessionSentiment;
+  mlMentionProbByFacet: Partial<Record<RuntimeFacet, number>>;
+  mlLikelyKnownByFacet: Partial<Record<RuntimeFacet, number>>;
+  usedML: boolean;
+  usedOpenAI: boolean;
+  usedFallback: boolean;
+}
+
+export interface SourceDiagnostics {
+  usedOpenAI: boolean;
   usedFallback: boolean;
 }
 
@@ -85,6 +94,8 @@ export interface SelectNextQuestionResult {
   whyThisQuestion: string;
   scoreBreakdown: ScoreBreakdown | null;
   supportingEvidence: PropertyFacetEvidence[];
+  analysis: ReviewAnalysisResult | null;
+  questionSource: SourceDiagnostics | null;
   noFollowUp: boolean;
 }
 
@@ -92,6 +103,7 @@ export interface SubmitFollowUpAnswerResult {
   structuredFacts: StructuredFact[];
   confidence: number;
   propertyCardDelta: PropertyCardDelta;
+  usedOpenAI: boolean;
   usedFallback: boolean;
 }
 
@@ -102,6 +114,11 @@ export interface StoredReviewSession {
   selectedFacet: RuntimeFacet | null;
   mentionedFacets: RuntimeFacet[];
   likelyKnownFacets: RuntimeFacet[];
+  mlMentionProbByFacet: Partial<Record<RuntimeFacet, number>>;
+  mlLikelyKnownByFacet: Partial<Record<RuntimeFacet, number>>;
+  usedML: boolean;
+  usedOpenAI: boolean;
+  usedFallback: boolean;
   sentiment: SessionSentiment;
   createdAt: string;
   updatedAt: string;
@@ -116,6 +133,8 @@ export interface StoredFollowUpQuestion {
   whyThisQuestion: string;
   scoreBreakdown: ScoreBreakdown;
   supportingEvidence: PropertyFacetEvidence[];
+  usedOpenAI: boolean;
+  usedFallback: boolean;
   createdAt: string;
 }
 
@@ -126,6 +145,7 @@ export interface StoredFollowUpAnswer {
   answerText: string;
   structuredFacts: StructuredFact[];
   confidence: number;
+  usedOpenAI: boolean;
   usedFallback: boolean;
   createdAt: string;
 }

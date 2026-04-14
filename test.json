@@ -1,0 +1,314 @@
+{
+    "session": {
+      "sessionId": "session_1",
+      "propertySummary": {
+        "propertyId": "ff26cdda236b233f7c481f0e896814075ac6bed335e162e0ff01d5491343f838",
+        "city": "Frisco",
+        "province": "Texas",
+        "country": "United States",
+        "starRating": 3.5,
+        "guestRating": 9.2,
+        "propertySummary": "Frisco, Texas, United States. art deco hotel with free parking, 4-minute walk to comerica center. a restaurant, a 24-hour fitness center, and a bar/lounge are available at this smoke-free hotel. free wifi in public areas, free self parking, and a free area shuttle are also provided. other amenities include a snack bar/deli, coffee/tea in a common a",
+        "popularAmenities": "ac; bar; breakfast_available; business_services; crib; elevator; fitness_equipment; free_parking; frontdesk_24_hour; grocery; heater; housekeeping; internet; laundry; no_smoking; pool; restaurant; room_service; tv",
+        "facetListingTexts": {
+          "check_in": "check_in_start_time: 3:00 PM | check_in_end_time: 2:00 AM | check_in_instructions: front desk staff will greet guests on arrival at the property; information provided by the property may be translated using automated translation tools",
+          "check_out": "check_out_time: noon | check_out_policy: Check-out before noon; Contactless check-out available; Express check-out available; Late check-out subject to availability",
+          "amenities_breakfast": "property_description: art deco hotel with free parking, 4-minute walk to comerica center. a restaurant, a 24-hour fitness center, and a bar/lounge are available at this smoke-free hotel. free wifi in public areas, free self parking, and a free area shuttle are also provided. other amenities include a snack bar/deli, coffee/tea in a common area, and a seasonal outdoor pool. . hotel |MASK| frisco by |MASK| offers 110 air-conditioned accommodations with safes and complimentary newspapers. accommodations offer separate sitting areas. premium cable television is provided. bathrooms include showers, complimentary toiletries, and hair dryers. <p>this frisco hotel provides complimentary wireless internet access. business-friendly amenities include desks and phones; free local calls are provided (restrictions may apply). additionally, rooms include complimentary bottled water and coffee/tea makers. housekeeping is provided daily. </p>. recreational amenities at the hotel include a 24-hour fitness center and a seasonal outdoor pool. <p>children under 14 years old are not allowed in the swimming pool or fitness facility without adult supervision. </p> | popular_amenities_list: ac; bar; breakfast_available; business_services; crib; elevator; fitness_equipment; free_parking; frontdesk_24_hour; grocery; heater; housekeeping; internet; laundry; no_smoking; pool; restaurant; room_service; tv | property_amenity_food_and_drink: 1 bar; 1 restaurant; coffee/tea in common area(s); cooked-to-order breakfast available for a fee 6:30 am–10:30 am on weekdays and 6:30 am–11:00 am on weekends: usd 5.0-20 for adults and usd 5.00-20.00 for children; room service available",
+          "amenities_parking": "popular_amenities_list: ac; bar; breakfast_available; business_services; crib; elevator; fitness_equipment; free_parking; frontdesk_24_hour; grocery; heater; housekeeping; internet; laundry; no_smoking; pool; restaurant; room_service; tv | property_amenity_parking: free area shuttle up to 5 miles; free self parking on site; onsite parking includes off-street options; wheelchair-accessible parking available | know_before_you_go: children under 14 years old are not allowed in the swimming pool or fitness facility without adult supervision; only registered guests are allowed in the guestrooms; pool access available from 8:00 am to 1:00 pm; the seasonal pool will be open from march to september; this property welcomes guests of all sexual orientations and gender identities (lgbtq+ friendly)",
+          "know_before_you_go": "know_before_you_go: children under 14 years old are not allowed in the swimming pool or fitness facility without adult supervision; only registered guests are allowed in the guestrooms; pool access available from 8:00 am to 1:00 pm; the seasonal pool will be open from march to september; this property welcomes guests of all sexual orientations and gender identities (lgbtq+ friendly)",
+          "amenities_pool": "popular_amenities_list: ac; bar; breakfast_available; business_services; crib; elevator; fitness_equipment; free_parking; frontdesk_24_hour; grocery; heater; housekeeping; internet; laundry; no_smoking; pool; restaurant; room_service; tv | property_amenity_things_to_do: 24-hour fitness center; seasonal outdoor pool | know_before_you_go: children under 14 years old are not allowed in the swimming pool or fitness facility without adult supervision; only registered guests are allowed in the guestrooms; pool access available from 8:00 am to 1:00 pm; the seasonal pool will be open from march to september; this property welcomes guests of all sexual orientations and gender identities (lgbtq+ friendly)",
+          "pet": "pet_policy: 2 total pets; Food and water bowls are available; Pets allowed for an extra charge of USD 50 per pet, per night (maximum USD 75 per stay); Pets cannot be left unattended; Restrictions apply; for more information contact the property at the number on the booking confirmation; Service animals are welcome, and are exempt from fees; Welcoming dogs and cats only",
+          "children_extra_bed": "children_and_extra_bed_policy: <ul><li>Children are welcome.</li></ul><ul><li>Kids stay free! Up to 2 children 18 years old and younger stay free when using existing bedding.</li></ul><ul><li>Rollaway/extra beds are not available.</li></ul><ul><li>Free cribs (infant beds)!</li></ul>",
+          "amenities_wifi": "popular_amenities_list: ac; bar; breakfast_available; business_services; crib; elevator; fitness_equipment; free_parking; frontdesk_24_hour; grocery; heater; housekeeping; internet; laundry; no_smoking; pool; restaurant; room_service; tv | property_amenity_internet: available in all rooms: free wifi; available in some public areas: free wifi",
+          "amenities_gym": "popular_amenities_list: ac; bar; breakfast_available; business_services; crib; elevator; fitness_equipment; free_parking; frontdesk_24_hour; grocery; heater; housekeeping; internet; laundry; no_smoking; pool; restaurant; room_service; tv | property_amenity_things_to_do: 24-hour fitness center; seasonal outdoor pool"
+        },
+        "demoScenario": "check_in_friction",
+        "demoFlags": [
+          "demo",
+          "check_in_friction"
+        ]
+      },
+      "eligibleFacets": [
+        {
+          "facet": "check_in",
+          "reliabilityClass": "high",
+          "importance": 0.95
+        },
+        {
+          "facet": "check_out",
+          "reliabilityClass": "high",
+          "importance": 0.84
+        },
+        {
+          "facet": "amenities_breakfast",
+          "reliabilityClass": "high",
+          "importance": 0.9
+        },
+        {
+          "facet": "amenities_parking",
+          "reliabilityClass": "high",
+          "importance": 0.92
+        }
+      ]
+    },
+    "analysis": {
+      "mentionedFacets": [
+        "check_in"
+      ],
+      "likelyKnownFacets": [
+        "check_in"
+      ],
+      "sentiment": "mixed",
+      "mlMentionProbByFacet": {
+        "check_in": 0.531,
+        "check_out": 0.213,
+        "amenities_breakfast": 0.131,
+        "amenities_parking": 0.02,
+        "know_before_you_go": 0.319,
+        "amenities_pool": 0.066
+      },
+      "mlLikelyKnownByFacet": {
+        "check_in": 0.531,
+        "check_out": 0.213,
+        "amenities_breakfast": 0.131,
+        "amenities_parking": 0.02,
+        "know_before_you_go": 0.319,
+        "amenities_pool": 0.066
+      },
+      "usedML": true,
+      "usedOpenAI": true,
+      "usedFallback": false
+    },
+    "question": {
+      "facet": "check_out",
+      "questionText": "What time is check-out at this hotel?",
+      "voiceText": "What time do I need to check out?",
+      "whyThisQuestion": "Asked about check out because recent reviewers rarely mention it and recent matched support for the listing is weak. Supporting evidence: check_out_time: noon | check_out_policy: Check-out before noon; Contactless check-out available; Express check-out available; Late check-out subject to availability",
+      "scoreBreakdown": {
+        "importance": 0.21,
+        "staleness": 0.072,
+        "conflict": 0.078,
+        "coverageGap": 0.148,
+        "matchedSupportGap": 0.102,
+        "alreadyMentionedPenalty": 0,
+        "reviewerKnowsBoost": 0,
+        "total": 0.61
+      },
+      "supportingEvidence": [
+        {
+          "propertyId": "ff26cdda236b233f7c481f0e896814075ac6bed335e162e0ff01d5491343f838",
+          "facet": "check_out",
+          "sourceType": "listing_summary",
+          "snippet": "check_out_time: noon | check_out_policy: Check-out before noon; Contactless check-out available; Express check-out available; Late check-out subject to availability",
+          "evidenceScore": 0.5
+        },
+        {
+          "propertyId": "ff26cdda236b233f7c481f0e896814075ac6bed335e162e0ff01d5491343f838",
+          "facet": "check_out",
+          "sourceType": "validated_conflict",
+          "snippet": "limited amenities and charged extra cleaning fees for no reason when we asked during checkout",
+          "acquisitionDate": "2025-12-29",
+          "evidenceScore": 0.031049421057105064
+        },
+        {
+          "propertyId": "ff26cdda236b233f7c481f0e896814075ac6bed335e162e0ff01d5491343f838",
+          "facet": "check_out",
+          "sourceType": "validated_conflict",
+          "snippet": "age of check in. expedia website failed to state check in age of this hotel so i travelled 3 hours to stay here and was turned down at the front desk because i was not 21. the hotel seemed very nice but the lady at the front desk wasn't exa",
+          "acquisitionDate": "2023-03-02",
+          "evidenceScore": 0.018769720569252968
+        }
+      ],
+      "analysis": {
+        "mentionedFacets": [
+          "check_in"
+        ],
+        "likelyKnownFacets": [
+          "check_in"
+        ],
+        "sentiment": "mixed",
+        "mlMentionProbByFacet": {
+          "check_in": 0.531,
+          "check_out": 0.213,
+          "amenities_breakfast": 0.131,
+          "amenities_parking": 0.02,
+          "know_before_you_go": 0.319,
+          "amenities_pool": 0.066
+        },
+        "mlLikelyKnownByFacet": {
+          "check_in": 0.531,
+          "check_out": 0.213,
+          "amenities_breakfast": 0.131,
+          "amenities_parking": 0.02,
+          "know_before_you_go": 0.319,
+          "amenities_pool": 0.066
+        },
+        "usedML": true,
+        "usedOpenAI": true,
+        "usedFallback": false
+      },
+      "questionSource": {
+        "usedOpenAI": true,
+        "usedFallback": false
+      },
+      "noFollowUp": false
+    },
+    "answer": {
+      "structuredFacts": [
+        {
+          "facet": "check_out",
+          "factType": "frustration_duration",
+          "value": "35 minutes",
+          "confidence": 0.9
+        },
+        {
+          "facet": "check_out",
+          "factType": "check_in_time",
+          "value": "4:10 PM",
+          "confidence": 0.9
+        }
+      ],
+      "confidence": 0.9,
+      "propertyCardDelta": {
+        "summary": "Captured 2 check out facts for append-only evidence updates.",
+        "addedFacts": [
+          {
+            "facet": "check_out",
+            "factType": "frustration_duration",
+            "value": "35 minutes",
+            "confidence": 0.9
+          },
+          {
+            "facet": "check_out",
+            "factType": "check_in_time",
+            "value": "4:10 PM",
+            "confidence": 0.9
+          }
+        ]
+      },
+      "usedOpenAI": true,
+      "usedFallback": false
+    },
+    "summary": {
+      "draftReview": "The room was comfortable, but getting settled took forever because the desk kept saying the room still was not ready after arrival.",
+      "selectedFacet": "check_out",
+      "askedQuestion": {
+        "sessionId": "session_1",
+        "facet": "check_out",
+        "questionText": "What time is check-out at this hotel?",
+        "voiceText": "What time do I need to check out?",
+        "whyThisQuestion": "Asked about check out because recent reviewers rarely mention it and recent matched support for the listing is weak. Supporting evidence: check_out_time: noon | check_out_policy: Check-out before noon; Contactless check-out available; Express check-out available; Late check-out subject to availability",
+        "scoreBreakdown": {
+          "importance": 0.21,
+          "staleness": 0.072,
+          "conflict": 0.078,
+          "coverageGap": 0.148,
+          "matchedSupportGap": 0.102,
+          "alreadyMentionedPenalty": 0,
+          "reviewerKnowsBoost": 0,
+          "total": 0.61
+        },
+        "supportingEvidence": [
+          {
+            "propertyId": "ff26cdda236b233f7c481f0e896814075ac6bed335e162e0ff01d5491343f838",
+            "facet": "check_out",
+            "sourceType": "listing_summary",
+            "snippet": "check_out_time: noon | check_out_policy: Check-out before noon; Contactless check-out available; Express check-out available; Late check-out subject to availability",
+            "evidenceScore": 0.5
+          },
+          {
+            "propertyId": "ff26cdda236b233f7c481f0e896814075ac6bed335e162e0ff01d5491343f838",
+            "facet": "check_out",
+            "sourceType": "validated_conflict",
+            "snippet": "limited amenities and charged extra cleaning fees for no reason when we asked during checkout",
+            "acquisitionDate": "2025-12-29",
+            "evidenceScore": 0.031049421057105064
+          },
+          {
+            "propertyId": "ff26cdda236b233f7c481f0e896814075ac6bed335e162e0ff01d5491343f838",
+            "facet": "check_out",
+            "sourceType": "validated_conflict",
+            "snippet": "age of check in. expedia website failed to state check in age of this hotel so i travelled 3 hours to stay here and was turned down at the front desk because i was not 21. the hotel seemed very nice but the lady at the front desk wasn't exa",
+            "acquisitionDate": "2023-03-02",
+            "evidenceScore": 0.018769720569252968
+          }
+        ],
+        "usedOpenAI": true,
+        "usedFallback": false,
+        "createdAt": "2026-04-14T13:14:38.380Z",
+        "id": "question_1"
+      },
+      "answer": {
+        "sessionId": "session_1",
+        "facet": "check_out",
+        "answerText": "Check-in was frustrating. We waited about 35 minutes, then finally got the keys around 4:10 pm.",
+        "structuredFacts": [
+          {
+            "facet": "check_out",
+            "factType": "frustration_duration",
+            "value": "35 minutes",
+            "confidence": 0.9
+          },
+          {
+            "facet": "check_out",
+            "factType": "check_in_time",
+            "value": "4:10 PM",
+            "confidence": 0.9
+          }
+        ],
+        "confidence": 0.9,
+        "usedOpenAI": true,
+        "usedFallback": false,
+        "createdAt": "2026-04-14T13:14:41.297Z",
+        "id": "answer_1"
+      },
+      "extractedFacts": [
+        {
+          "facet": "check_out",
+          "factType": "frustration_duration",
+          "value": "35 minutes",
+          "confidence": 0.9
+        },
+        {
+          "facet": "check_out",
+          "factType": "check_in_time",
+          "value": "4:10 PM",
+          "confidence": 0.9
+        }
+      ],
+      "accumulatedEvidenceUpdates": [
+        {
+          "propertyId": "ff26cdda236b233f7c481f0e896814075ac6bed335e162e0ff01d5491343f838",
+          "facet": "check_out",
+          "factType": "frustration_duration",
+          "value": "35 minutes",
+          "confidence": 0.9,
+          "sourceSessionId": "session_1",
+          "createdAt": "2026-04-14T13:14:41.297Z",
+          "rawFact": {
+            "facet": "check_out",
+            "factType": "frustration_duration",
+            "value": "35 minutes",
+            "confidence": 0.9
+          },
+          "id": "update_1"
+        },
+        {
+          "propertyId": "ff26cdda236b233f7c481f0e896814075ac6bed335e162e0ff01d5491343f838",
+          "facet": "check_out",
+          "factType": "check_in_time",
+          "value": "4:10 PM",
+          "confidence": 0.9,
+          "sourceSessionId": "session_1",
+          "createdAt": "2026-04-14T13:14:41.297Z",
+          "rawFact": {
+            "facet": "check_out",
+            "factType": "check_in_time",
+            "value": "4:10 PM",
+            "confidence": 0.9
+          },
+          "id": "update_2"
+        }
+      ]
+    }
+  }

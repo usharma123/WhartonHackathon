@@ -94,7 +94,7 @@ export function createConvexStore(db: ConvexDb): ReviewGapStore {
     },
 
     async createReviewSession(session) {
-      const id = await db.insert("reviewSessions", session);
+      const id = await db.insert("reviewSessions", sessionDoc(session));
       return { ...session, id: String(id) };
     },
 
@@ -241,9 +241,22 @@ function mapSession(doc: any): StoredReviewSession {
     selectedFacet: doc.selectedFacet ?? null,
     mentionedFacets: doc.mentionedFacets ?? [],
     likelyKnownFacets: doc.likelyKnownFacets ?? [],
+    mlMentionProbByFacet: probabilitiesToMap(doc.mlMentionProbByFacet),
+    mlLikelyKnownByFacet: probabilitiesToMap(doc.mlLikelyKnownByFacet),
+    usedML: doc.usedML ?? false,
+    usedOpenAI: doc.usedOpenAI ?? false,
+    usedFallback: doc.usedFallback ?? false,
     sentiment: doc.sentiment,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
+  };
+}
+
+function sessionDoc(session: Omit<StoredReviewSession, "id">) {
+  return {
+    ...session,
+    mlMentionProbByFacet: probabilitiesToEntries(session.mlMentionProbByFacet),
+    mlLikelyKnownByFacet: probabilitiesToEntries(session.mlLikelyKnownByFacet),
   };
 }
 
@@ -257,6 +270,8 @@ function mapQuestion(doc: any): StoredFollowUpQuestion {
     whyThisQuestion: doc.whyThisQuestion,
     scoreBreakdown: doc.scoreBreakdown,
     supportingEvidence: doc.supportingEvidence,
+    usedOpenAI: doc.usedOpenAI ?? false,
+    usedFallback: doc.usedFallback ?? false,
     createdAt: doc.createdAt,
   };
 }
@@ -273,6 +288,7 @@ function mapAnswer(doc: any): StoredFollowUpAnswer {
     answerText: doc.answerText,
     structuredFacts: doc.structuredFacts,
     confidence: doc.confidence,
+    usedOpenAI: doc.usedOpenAI ?? false,
     usedFallback: doc.usedFallback,
     createdAt: doc.createdAt,
   };
@@ -298,4 +314,18 @@ function mapUpdate(doc: any): PropertyEvidenceUpdate {
 
 function updateDoc(update: Omit<PropertyEvidenceUpdate, "id">) {
   return update;
+}
+
+function probabilitiesToEntries(
+  probabilities: Partial<Record<string, number>>,
+): Array<{ facet: string; value: number }> {
+  return Object.entries(probabilities)
+    .filter((entry): entry is [string, number] => typeof entry[1] === "number")
+    .map(([facet, value]) => ({ facet, value }));
+}
+
+function probabilitiesToMap(
+  probabilities: Array<{ facet: string; value: number }> | undefined,
+): Partial<Record<string, number>> {
+  return Object.fromEntries((probabilities ?? []).map((item) => [item.facet, item.value]));
 }

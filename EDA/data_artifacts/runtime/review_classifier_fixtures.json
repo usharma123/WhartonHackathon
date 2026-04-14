@@ -1,0 +1,35 @@
+[
+  {
+    "text": "Check-in took forty minutes, the front desk was overwhelmed, and our room was not ready.",
+    "probabilities": {
+      "check_in": 0.999694,
+      "check_out": 0.938849,
+      "amenities_breakfast": 0.232773,
+      "amenities_parking": 0.025359,
+      "know_before_you_go": 0.590409,
+      "amenities_pool": 0.046899
+    }
+  },
+  {
+    "text": "Breakfast was barely stocked, there was no coffee, and nothing was ready by eight.",
+    "probabilities": {
+      "check_in": 0.218451,
+      "check_out": 0.273385,
+      "amenities_breakfast": 0.990395,
+      "amenities_parking": 0.110198,
+      "know_before_you_go": 0.120336,
+      "amenities_pool": 0.044739
+    }
+  },
+  {
+    "text": "Parking was easy and free, but the pool was closed earlier than the listing said.",
+    "probabilities": {
+      "check_in": 0.127824,
+      "check_out": 0.181984,
+      "amenities_breakfast": 0.179186,
+      "amenities_parking": 0.752914,
+      "know_before_you_go": 0.239171,
+      "amenities_pool": 0.952862
+    }
+  }
+]
