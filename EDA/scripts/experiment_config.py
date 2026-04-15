@@ -18,7 +18,7 @@ See program.md for the full autoresearch ratchet loop instructions:
 # semantic_threshold + POSITIVE_MARGIN, and a negative example only if
 # its score <= semantic_threshold - NEGATIVE_MARGIN.
 # Tighter margins = fewer but cleaner labels.
-POSITIVE_MARGIN: float = 0.07
+POSITIVE_MARGIN: float = 0.08
 NEGATIVE_MARGIN: float = 0.25
 
 # Minimum character length of review text to include in training.

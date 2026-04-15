@@ -15,3 +15,4 @@ timestamp	hypothesis	weighted_f1	mean_roc_auc	gate_rate	combined_score	kept	C	ma
 2026-04-15T20:04:31Z	NEGATIVE_MARGIN 0.25→0.30: test if gains plateau or continue	0.9954	nan	0.6667	nan	?	10.0	2500	0.05	0.3	40	365
 2026-04-15T20:04:52Z	MAX_FEATURES 2500→3500: more bigrams with clean neg_margin=0.25 labels	0.9877	0.9846	1.0	0.9884	?	10.0	3500	0.05	0.25	40	365
 2026-04-15T20:05:11Z	POSITIVE_MARGIN 0.05→0.07: modest positive label cleaning (0.10 was too aggressive)	0.992	0.9881	1.0	0.9919	?	10.0	2500	0.07	0.25	40	365
+2026-04-15T20:05:34Z	POSITIVE_MARGIN 0.07→0.08	0.9957	0.9861	1.0	0.993	?	10.0	2500	0.08	0.25	40	365
