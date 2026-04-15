@@ -44,11 +44,11 @@ EDA/data_artifacts/      ├──► train_review_classifier.py  (uses experime
 5. Run:  python3 EDA/scripts/train_review_classifier.py
          python3 EDA/scripts/export_runtime_artifacts.py
 6. Run:  python3 EDA/scripts/evaluate.py
-         (prints combined_score and appends a row to results.tsv)
+         (prints combined_score and appends a row to results.tsv with kept=yes/no)
 7. If combined_score improved →  git add EDA/scripts/experiment_config.py \
                                           EDA/data_artifacts/runtime/ && \
                                  git commit -m "ratchet: <hypothesis>"
-   If NOT improved           →  git checkout EDA/scripts/experiment_config.py
+   If NOT improved           →  revert the config change and rerun the baseline artifacts
 8. Go to step 1
 ```
 
@@ -75,6 +75,7 @@ EDA/data_artifacts/      ├──► train_review_classifier.py  (uses experime
 | `NGRAM_RANGE` | (1, 2) | TF-IDF n-gram range |
 | `CLASS_WEIGHT` | "balanced" | Class weighting for imbalanced labels; try None or dict |
 | `MAX_ITER` | 1500 | Solver iteration limit |
+| `CV_FOLDS` | 5 | Grouped CV folds for out-of-fold evaluation |
 
 #### Shipping Gate (when a model is accepted)
 | Parameter | Default | Description |
@@ -110,11 +111,16 @@ EDA/data_artifacts/      ├──► train_review_classifier.py  (uses experime
 The evaluation metric is computed in `evaluate.py`:
 
 ```
-weighted_f1  = mean of per-facet F1, weighted by importance
-mean_roc_auc = unweighted mean of per-facet ROC-AUC
+weighted_f1  = mean of per-facet out-of-fold F1, weighted by facet importance
+mean_roc_auc = mean of per-facet out-of-fold ROC-AUC
 gate_rate    = fraction of facets that pass their shipping gate
+ml_score     = 0.5 * weighted_f1 + 0.35 * mean_roc_auc + 0.15 * gate_rate
 
-combined_score = 0.5 * weighted_f1 + 0.35 * mean_roc_auc + 0.15 * gate_rate
+rules_score  = 0.4 * validated-conflict recall
+             + 0.3 * top-1 ranking accuracy
+             + 0.3 * reciprocal-rank quality
+
+combined_score = 0.85 * ml_score + 0.15 * rules_score
 ```
 
 **Keep a commit only if `combined_score` strictly exceeds the previous best.**
@@ -170,7 +176,7 @@ combined_score = 0.5 * weighted_f1 + 0.35 * mean_roc_auc + 0.15 * gate_rate
 timestamp	hypothesis	weighted_f1	mean_roc_auc	gate_rate	combined_score	kept
 ```
 
-`evaluate.py` appends a row automatically. Record `kept=yes` or `kept=no` after the ratchet decision.
+`evaluate.py` appends a row automatically and sets `kept=yes` or `kept=no`.
 
 ---
 

@@ -131,9 +131,9 @@ export function extractTerms(
     .map((token) => (artifact.tokenizer.lowercase ? token.toLowerCase() : token));
 
   const terms = [...tokens];
-  if (artifact.tokenizer.ngramRange[1] >= 2) {
-    for (let index = 0; index < tokens.length - 1; index += 1) {
-      terms.push(`${tokens[index]} ${tokens[index + 1]}`);
+  for (let size = Math.max(2, artifact.tokenizer.ngramRange[0]); size <= artifact.tokenizer.ngramRange[1]; size += 1) {
+    for (let index = 0; index <= tokens.length - size; index += 1) {
+      terms.push(tokens.slice(index, index + size).join(" "));
     }
   }
   return terms;

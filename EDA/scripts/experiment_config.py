@@ -18,12 +18,12 @@ See program.md for the full autoresearch ratchet loop instructions:
 # semantic_threshold + POSITIVE_MARGIN, and a negative example only if
 # its score <= semantic_threshold - NEGATIVE_MARGIN.
 # Tighter margins = fewer but cleaner labels.
-POSITIVE_MARGIN: float = 0.08
+POSITIVE_MARGIN: float = 0.07
 NEGATIVE_MARGIN: float = 0.25
 
 # Minimum character length of review text to include in training.
 # Short reviews tend to be noisy ("great hotel!") and hurt precision.
-MIN_TEXT_LEN: int = 40
+MIN_TEXT_LEN: int = 30
 
 # Logistic regression regularization.
 # Higher C = less regularization (more capacity, more risk of overfitting).
@@ -32,7 +32,7 @@ C: float = 10.0
 
 # Maximum number of TF-IDF features (vocabulary size).
 # Higher values capture more hotel-specific bigrams but slow inference.
-MAX_FEATURES: int = 2500
+MAX_FEATURES: int = 3500
 
 # Minimum document frequency for a term to enter the vocabulary.
 # MIN_DF=2 removes hapax legomena (words appearing once).
@@ -52,6 +52,10 @@ MAX_ITER: int = 1500
 
 # Random seed for reproducible train/val splits and model initialization.
 RANDOM_STATE: int = 42
+
+# Number of grouped CV folds for out-of-fold evaluation.
+# The trainer will clamp this to the number of available properties.
+CV_FOLDS: int = 5
 
 # ---------------------------------------------------------------------------
 # Shipping Gate — minimum metrics for a model to be accepted

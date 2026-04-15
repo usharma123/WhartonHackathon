@@ -81,7 +81,7 @@ describe("scoring and fallbacks", () => {
 
     expect(ranked[0]?.facet).toBe("check_in");
     expect(ranked[0]?.scoreBreakdown.total).toBe(0.809);
-    expect(ranked[1]?.scoreBreakdown.total).toBe(0.614);
+    expect(ranked[1]?.scoreBreakdown.total).toBe(0.615);
   });
 
   it("uses facet-specific fallback question templates", () => {

@@ -65,7 +65,7 @@ export function buildScoreBreakdown(
 
   const breakdown: ScoreBreakdown = {
     importance: round(metric.importance * 0.25),
-    staleness: round(normalizeStaleness(metric.daysSince) * 0.25),
+    staleness: round(metric.stalenessScore * 0.25),
     conflict: round(normalizeConflict(metric.validatedConflictScore) * 0.2),
     coverageGap: round((1 - metric.mentionRate) * 0.15),
     matchedSupportGap: round((1 - matchedSupport(metric)) * 0.15),

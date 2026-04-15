@@ -10,6 +10,7 @@ See program.md for the full autoresearch ratchet loop instructions.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -17,7 +18,7 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score, precision_score, recall_score, roc_auc_score
-from sklearn.model_selection import GroupShuffleSplit
+from sklearn.model_selection import StratifiedGroupKFold
 
 import experiment_config as cfg  # noqa: E402 — loaded from same directory
 
@@ -71,10 +72,49 @@ def load_thresholds() -> dict[str, float]:
     return dict(zip(thresholds["facet"], thresholds["threshold"]))
 
 
-def choose_split(frame: pd.DataFrame):
-    splitter = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=RANDOM_STATE)
-    groups = frame["eg_property_id"]
-    return next(splitter.split(frame, groups=groups))
+def build_vectorizer() -> TfidfVectorizer:
+    return TfidfVectorizer(
+        lowercase=True,
+        strip_accents="unicode",
+        token_pattern=r"(?u)\b\w\w+\b",
+        ngram_range=cfg.NGRAM_RANGE,
+        min_df=cfg.MIN_DF,
+        max_features=cfg.MAX_FEATURES,
+        norm="l2",
+        use_idf=True,
+        smooth_idf=True,
+    )
+
+
+def build_model() -> LogisticRegression:
+    return LogisticRegression(
+        random_state=cfg.RANDOM_STATE,
+        max_iter=cfg.MAX_ITER,
+        class_weight=cfg.CLASS_WEIGHT,
+        C=cfg.C,
+    )
+
+
+def choose_splits(frame: pd.DataFrame) -> list[tuple[np.ndarray, np.ndarray]]:
+    groups = frame["eg_property_id"].astype(str).to_numpy()
+    labels = frame["label"].to_numpy()
+    n_splits = min(cfg.CV_FOLDS, int(pd.Series(groups).nunique()))
+    if n_splits < 2:
+        raise RuntimeError("Need at least 2 distinct properties for grouped evaluation.")
+    splitter = StratifiedGroupKFold(
+        n_splits=n_splits,
+        shuffle=True,
+        random_state=RANDOM_STATE,
+    )
+    splits: list[tuple[np.ndarray, np.ndarray]] = []
+    for train_idx, test_idx in splitter.split(frame["full_text"], labels, groups):
+        y_train = labels[train_idx]
+        if np.unique(y_train).size < 2:
+            continue
+        splits.append((train_idx, test_idx))
+    if len(splits) < 2:
+        raise RuntimeError("Could not build enough valid grouped CV folds for evaluation.")
+    return splits
 
 
 def select_threshold(y_true: np.ndarray, probabilities: np.ndarray) -> tuple[float, float, float, float]:
@@ -109,23 +149,23 @@ def train_models():
     if len(reviews) != len(scores):
         raise RuntimeError("Review rows and semantic score rows are misaligned.")
 
-    shared_vectorizer = TfidfVectorizer(
-        lowercase=True,
-        strip_accents="unicode",
-        token_pattern=r"(?u)\b\w\w+\b",
-        ngram_range=cfg.NGRAM_RANGE,
-        min_df=cfg.MIN_DF,
-        max_features=cfg.MAX_FEATURES,
-        norm="l2",
-        use_idf=True,
-        smooth_idf=True,
-    )
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    shared_vectorizer = build_vectorizer()
     shared_vectorizer.fit(reviews["full_text"])
     base_terms = shared_vectorizer.get_feature_names_out().tolist()
     base_vocab = {term: index for index, term in enumerate(base_terms)}
 
     models = []
-    report = {"generatedAt": "2026-04-14", "shippingGatePassed": True, "facets": []}
+    report = {
+        "generatedAt": generated_at,
+        "shippingGatePassed": True,
+        "evaluation": {
+            "type": "out_of_fold_stratified_group_kfold",
+            "folds": min(cfg.CV_FOLDS, int(reviews["eg_property_id"].nunique())),
+        },
+        "facets": [],
+    }
 
     for facet in FACETS:
         threshold = thresholds[facet]
@@ -137,33 +177,40 @@ def train_models():
         if frame["label"].nunique() < 2:
             raise RuntimeError(f"Not enough label variety to train {facet}.")
 
-        train_idx, test_idx = choose_split(frame)
-        train = frame.iloc[train_idx]
-        test = frame.iloc[test_idx]
-        model = LogisticRegression(
-            random_state=cfg.RANDOM_STATE,
-            max_iter=cfg.MAX_ITER,
-            class_weight=cfg.CLASS_WEIGHT,
-            C=cfg.C,
-        )
-        x_train = shared_vectorizer.transform(train["full_text"])
-        x_test = shared_vectorizer.transform(test["full_text"])
-        y_train = train["label"].to_numpy()
-        y_test = test["label"].to_numpy()
-        model.fit(x_train, y_train)
-        probabilities = model.predict_proba(x_test)[:, 1]
-        chosen_threshold, f1, precision, recall = select_threshold(y_test, probabilities)
-        roc_auc = float(roc_auc_score(y_test, probabilities))
+        splits = choose_splits(frame)
+        oof_probabilities = np.full(len(frame), np.nan, dtype=float)
+        training_sizes: list[int] = []
+        validation_sizes: list[int] = []
+
+        for train_idx, test_idx in splits:
+            train = frame.iloc[train_idx]
+            test = frame.iloc[test_idx]
+            training_sizes.append(int(len(train)))
+            validation_sizes.append(int(len(test)))
+
+            train_groups = set(train["eg_property_id"].astype(str))
+            fold_reviews = reviews[reviews["eg_property_id"].astype(str).isin(train_groups)]
+            fold_vectorizer = build_vectorizer()
+            fold_vectorizer.fit(fold_reviews["full_text"])
+
+            model = build_model()
+            x_train = fold_vectorizer.transform(train["full_text"])
+            x_test = fold_vectorizer.transform(test["full_text"])
+            y_train = train["label"].to_numpy()
+            model.fit(x_train, y_train)
+            oof_probabilities[test_idx] = model.predict_proba(x_test)[:, 1]
+
+        if not np.isfinite(oof_probabilities).all():
+            raise RuntimeError(f"Incomplete out-of-fold predictions for {facet}.")
+
+        y_all = frame["label"].to_numpy()
+        chosen_threshold, f1, precision, recall = select_threshold(y_all, oof_probabilities)
+        roc_auc = float(roc_auc_score(y_all, oof_probabilities))
         passed = shipping_gate(facet, roc_auc, f1)
         report["shippingGatePassed"] = report["shippingGatePassed"] and passed
 
         x_all = shared_vectorizer.transform(frame["full_text"])
-        model_final = LogisticRegression(
-            random_state=cfg.RANDOM_STATE,
-            max_iter=cfg.MAX_ITER,
-            class_weight=cfg.CLASS_WEIGHT,
-            C=cfg.C,
-        )
+        model_final = build_model()
         model_final.fit(x_all, frame["label"].to_numpy())
 
         positive_terms, negative_terms = top_terms(base_terms, model_final.coef_[0])
@@ -171,8 +218,10 @@ def train_models():
             {
                 "facet": facet,
                 "threshold": chosen_threshold,
-                "trainingRows": int(len(train)),
-                "validationRows": int(len(test)),
+                "trainingRows": int(round(float(np.mean(training_sizes)))),
+                "validationRows": int(round(float(np.mean(validation_sizes)))),
+                "evaluationRows": int(len(frame)),
+                "folds": len(splits),
                 "positiveRate": float(round(frame["label"].mean(), 4)),
                 "rocAuc": float(round(roc_auc, 4)),
                 "f1": float(round(f1, 4)),
@@ -188,8 +237,10 @@ def train_models():
             {
                 "facet": facet,
                 "threshold": chosen_threshold,
-                "trainingRows": int(len(train)),
-                "validationRows": int(len(test)),
+                "trainingRows": int(round(float(np.mean(training_sizes)))),
+                "validationRows": int(round(float(np.mean(validation_sizes)))),
+                "evaluationRows": int(len(frame)),
+                "folds": len(splits),
                 "positiveRate": float(round(frame["label"].mean(), 4)),
                 "rocAuc": float(round(roc_auc, 4)),
                 "f1": float(round(f1, 4)),
@@ -201,12 +252,12 @@ def train_models():
 
     artifact = {
         "artifactType": "facet_classifier",
-        "version": "2026-04-14-v1",
-        "generatedAt": "2026-04-14",
+        "version": f"{generated_at}-oof",
+        "generatedAt": generated_at,
         "tokenizer": {
             "regex": r"\b\w\w+\b",
             "minTokenLength": 2,
-            "ngramRange": [1, 2],
+            "ngramRange": list(cfg.NGRAM_RANGE),
             "lowercase": True,
             "stripAccents": True,
             "l2Normalize": True,
