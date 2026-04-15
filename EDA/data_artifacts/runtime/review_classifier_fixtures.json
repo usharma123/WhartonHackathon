@@ -2,34 +2,34 @@
   {
     "text": "Check-in took forty minutes, the front desk was overwhelmed, and our room was not ready.",
     "probabilities": {
-      "check_in": 0.999961,
-      "check_out": 0.953124,
-      "amenities_breakfast": 0.1618,
-      "amenities_parking": 0.012692,
-      "know_before_you_go": 0.43504,
-      "amenities_pool": 0.018845
+      "check_in": 0.999991,
+      "check_out": 0.971516,
+      "amenities_breakfast": 0.119385,
+      "amenities_parking": 0.006844,
+      "know_before_you_go": 0.356982,
+      "amenities_pool": 0.008717
     }
   },
   {
     "text": "Breakfast was barely stocked, there was no coffee, and nothing was ready by eight.",
     "probabilities": {
-      "check_in": 0.148799,
-      "check_out": 0.290025,
-      "amenities_breakfast": 0.997199,
-      "amenities_parking": 0.059853,
-      "know_before_you_go": 0.070232,
-      "amenities_pool": 0.017258
+      "check_in": 0.110707,
+      "check_out": 0.300719,
+      "amenities_breakfast": 0.999015,
+      "amenities_parking": 0.038401,
+      "know_before_you_go": 0.03404,
+      "amenities_pool": 0.007702
     }
   },
   {
     "text": "Parking was easy and free, but the pool was closed earlier than the listing said.",
     "probabilities": {
-      "check_in": 0.070187,
-      "check_out": 0.147714,
-      "amenities_breakfast": 0.108494,
-      "amenities_parking": 0.745621,
-      "know_before_you_go": 0.155262,
-      "amenities_pool": 0.976572
+      "check_in": 0.041719,
+      "check_out": 0.158566,
+      "amenities_breakfast": 0.07403,
+      "amenities_parking": 0.768935,
+      "know_before_you_go": 0.116623,
+      "amenities_pool": 0.985843
     }
   }
 ]
