@@ -362,16 +362,37 @@ export function generateEnhancedReviewFallback(args: {
     .join(" ")
     .replace(/\s+/g, " ")
     .trim();
-  const ratingLead =
-    typeof args.overallRating === "number"
-      ? `Overall, I’d rate this stay ${args.overallRating} out of 10. `
-      : "";
+  return appendOverallRatingIfMissing(normalized, args.overallRating);
+}
 
-  if (normalized.endsWith(".") || normalized.endsWith("!") || normalized.endsWith("?")) {
-    return `${ratingLead}${normalized}`.trim();
+export function appendOverallRatingIfMissing(
+  reviewText: string,
+  overallRating?: number,
+): string {
+  const normalized = reviewText.trim();
+  if (!normalized) {
+    return normalized;
   }
+  if (typeof overallRating !== "number") {
+    return ensureSentenceEnd(normalized);
+  }
+  if (mentionsOverallRating(normalized, overallRating)) {
+    return ensureSentenceEnd(normalized);
+  }
+  return `${ensureSentenceEnd(normalized)} Overall, I’d rate this stay ${overallRating} out of 10.`;
+}
 
-  return `${ratingLead}${normalized}.`.trim();
+function ensureSentenceEnd(text: string): string {
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
+function mentionsOverallRating(text: string, overallRating: number): boolean {
+  const patterns = [
+    new RegExp(`\\b${overallRating}\\s*/\\s*10\\b`, "i"),
+    new RegExp(`\\b${overallRating}\\s+out of\\s+10\\b`, "i"),
+    new RegExp(`\\boverall\\b[^.?!]*\\b${overallRating}\\b`, "i"),
+  ];
+  return patterns.some((pattern) => pattern.test(text));
 }
 
 function isUnknownAnswer(text: string): boolean {

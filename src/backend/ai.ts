@@ -4,6 +4,7 @@ import type { RuntimeFacet } from "./facets.js";
 import {
   analyzeReviewReadiness,
   analyzeReviewFallback,
+  appendOverallRatingIfMissing,
   extractAnswerFactsFallback,
   fixedClarifierPrompt,
   generateClarifierFallback,
@@ -267,10 +268,12 @@ export async function generateEnhancedReviewWithFallback(
   try {
     const result = await client.generateEnhancedReview(input);
     return {
-      reviewText:
+      reviewText: appendOverallRatingIfMissing(
         typeof result.reviewText === "string" && result.reviewText.trim().length > 0
           ? result.reviewText.trim()
           : generateEnhancedReviewFallback(input),
+        input.overallRating,
+      ),
       usedOpenAI: true,
       usedFallback: false,
     };

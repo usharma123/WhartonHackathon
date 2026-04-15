@@ -60,6 +60,24 @@ const throwingAiClient: ReviewGapAIClient = {
   },
 };
 
+const firstPersonOnlyAiClient: ReviewGapAIClient = {
+  analyzeReview: async () => {
+    throw new Error("unused in this test");
+  },
+  generateQuestion: async () => {
+    throw new Error("unused in this test");
+  },
+  generateClarifier: async () => {
+    throw new Error("unused in this test");
+  },
+  extractAnswerFacts: async () => {
+    throw new Error("unused in this test");
+  },
+  generateEnhancedReview: async () => ({
+    reviewText: "I had a smooth check-in and the room was clean",
+  }),
+};
+
 describe("session flow", () => {
   it("creates a review session with eligible facets", async () => {
     const { store } = await createSeededStore();
@@ -136,6 +154,24 @@ describe("session flow", () => {
     expect(updatedSession?.aspectRatings).toEqual({ service: 4, cleanliness: 5 });
     expect(preview.overallRating).toBe(8);
     expect(preview.aspectRatings).toEqual({ service: 4, cleanliness: 5 });
+  });
+
+  it("appends the overall rating sentence when the AI review body omits it", async () => {
+    const { store } = await createSeededStore();
+    const session = await createReviewSession(store, { propertyId: PARKING_PROPERTY });
+    await updateStructuredReview(store, {
+      sessionId: session.sessionId,
+      overallRating: 8,
+    });
+
+    const preview = await finalizeReviewPreview(store, firstPersonOnlyAiClient, {
+      sessionId: session.sessionId,
+      draftReview: "Check-in was easy and the room was clean.",
+    });
+
+    expect(preview.reviewText).toBe(
+      "I had a smooth check-in and the room was clean. Overall, I’d rate this stay 8 out of 10.",
+    );
   });
 
   it("keeps greetings in conversational clarification mode", async () => {
