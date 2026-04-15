@@ -24,6 +24,13 @@ const structuredFactValidator = v.object({
   confidence: v.number(),
 });
 
+const aspectRatingsValidator = v.object({
+  service: v.optional(v.number()),
+  cleanliness: v.optional(v.number()),
+  amenities: v.optional(v.number()),
+  value: v.optional(v.number()),
+});
+
 const scoreBreakdownValidator = v.object({
   importance: v.number(),
   staleness: v.number(),
@@ -136,18 +143,38 @@ export default defineSchema({
 
   propertyLiveReviews: defineTable({
     propertyId: v.string(),
-    sourceVendor: v.literal("expedia"),
-    sourceUrl: v.string(),
+    sourceVendor: v.union(v.literal("expedia"), v.literal("first_party")),
+    sourceUrl: v.optional(v.string()),
     reviewIdHash: v.string(),
     headline: v.optional(v.string()),
     text: v.string(),
     rating: v.optional(v.number()),
     reviewDate: v.optional(v.string()),
     reviewerType: v.optional(v.string()),
+    tokenIdentifier: v.optional(v.string()),
+    sessionId: v.optional(v.string()),
     fetchedAt: v.string(),
   })
     .index("by_property_id", ["propertyId"])
     .index("by_property_id_and_review_id_hash", ["propertyId", "reviewIdHash"]),
+
+  userPropertyReviews: defineTable({
+    propertyId: v.string(),
+    tokenIdentifier: v.string(),
+    sessionId: v.string(),
+    reviewText: v.string(),
+    overallRating: v.optional(v.number()),
+    aspectRatings: v.optional(aspectRatingsValidator),
+    sentiment: v.string(),
+    answerCount: v.number(),
+    factCount: v.number(),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index("by_property_id", ["propertyId"])
+    .index("by_token_identifier", ["tokenIdentifier"])
+    .index("by_property_id_and_token_identifier", ["propertyId", "tokenIdentifier"])
+    .index("by_session_id", ["sessionId"]),
 
   propertyFacetLiveSignals: defineTable({
     propertyId: v.string(),
@@ -166,7 +193,12 @@ export default defineSchema({
 
   reviewSessions: defineTable({
     propertyId: v.string(),
+    tokenIdentifier: v.optional(v.string()),
     draftReview: v.string(),
+    conversationStage: v.optional(v.string()),
+    clarifierCount: v.optional(v.number()),
+    overallRating: v.optional(v.number()),
+    aspectRatings: v.optional(aspectRatingsValidator),
     selectedFacet: v.optional(v.string()),
     mentionedFacets: v.array(v.string()),
     likelyKnownFacets: v.array(v.string()),

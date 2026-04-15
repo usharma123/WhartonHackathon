@@ -9,7 +9,9 @@ import { loadRuntimeBundle } from "../src/backend/runtimeBundle.node.js";
 import { seedRuntimeBundle } from "../src/backend/runtimeBundle.js";
 import {
   analyzeDraftReview,
+  confirmEnhancedReview,
   createReviewSession,
+  finalizeReviewPreview,
   getSessionSummary,
   selectNextQuestion,
   submitFollowUpAnswer,
@@ -66,10 +68,20 @@ async function main() {
     { sessionId: session.sessionId, draftReview },
     classifierArtifact,
   );
-  const answer = await submitFollowUpAnswer(store, aiClient, {
+  const answer = await submitFollowUpAnswer(store, {
     sessionId: session.sessionId,
     facet: question.facet ?? "check_in",
     answerText,
+  });
+  const preview = await finalizeReviewPreview(store, aiClient, {
+    sessionId: session.sessionId,
+    draftReview,
+  });
+  await confirmEnhancedReview(store, {
+    sessionId: session.sessionId,
+    finalReviewText: preview.reviewText,
+    structuredFacts: preview.structuredFacts,
+    tokenIdentifier: "demo:user",
   });
   const summary = await getSessionSummary(store, session.sessionId);
 
@@ -80,6 +92,7 @@ async function main() {
         analysis,
         question,
         answer,
+        preview,
         summary,
       },
       null,

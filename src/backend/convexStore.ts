@@ -10,6 +10,7 @@ import type {
   StoredFollowUpAnswer,
   StoredFollowUpQuestion,
   StoredReviewSession,
+  UserPropertyReview,
 } from "./types.js";
 import { applyLiveSignalToMetric } from "./scoring.js";
 
@@ -215,6 +216,21 @@ export function createConvexStore(db: ConvexDb): ReviewGapStore {
       }
     },
 
+    async upsertPropertyLiveReview(review) {
+      const existing = await db
+        .query("propertyLiveReviews")
+        .withIndex("by_property_id_and_review_id_hash", (q: any) =>
+          q.eq("propertyId", review.propertyId).eq("reviewIdHash", review.reviewIdHash),
+        )
+        .unique();
+      const payload = liveReviewDoc(review);
+      if (existing) {
+        await db.patch(existing._id, payload);
+        return;
+      }
+      await db.insert("propertyLiveReviews", payload);
+    },
+
     async createReviewSession(session) {
       const id = await db.insert("reviewSessions", sessionDoc(session));
       return { ...session, id: String(id) };
@@ -266,6 +282,18 @@ export function createConvexStore(db: ConvexDb): ReviewGapStore {
       return doc ? mapAnswer(doc) : null;
     },
 
+    async listFollowUpAnswers(sessionId) {
+      const docs = await db
+        .query("followUpAnswers")
+        .withIndex("by_session_id", (q: any) => q.eq("sessionId", sessionId))
+        .collect();
+      return docs
+        .map(mapAnswer)
+        .sort((left: StoredFollowUpAnswer, right: StoredFollowUpAnswer) =>
+          left.createdAt.localeCompare(right.createdAt),
+        );
+    },
+
     async appendPropertyEvidenceUpdates(updates) {
       const stored: PropertyEvidenceUpdate[] = [];
       for (const update of updates) {
@@ -284,6 +312,59 @@ export function createConvexStore(db: ConvexDb): ReviewGapStore {
         .map(mapUpdate)
         .sort((left: PropertyEvidenceUpdate, right: PropertyEvidenceUpdate) =>
           left.createdAt.localeCompare(right.createdAt),
+        );
+    },
+
+    async replacePropertyFacetSourceEvidence(propertyId, facet, sourcePrefix, evidence) {
+      const existing = await db
+        .query("propertyFacetEvidence")
+        .withIndex("by_property_id_facet", (q: any) =>
+          q.eq("propertyId", propertyId).eq("facet", facet),
+        )
+        .collect();
+      for (const row of existing) {
+        if (String(row.sourceType).startsWith(sourcePrefix)) {
+          await db.delete(row._id);
+        }
+      }
+      for (const item of evidence) {
+        await db.insert("propertyFacetEvidence", item);
+      }
+    },
+
+    async upsertUserPropertyReview(review) {
+      const existing = await db
+        .query("userPropertyReviews")
+        .withIndex("by_property_id_and_token_identifier", (q: any) =>
+          q.eq("propertyId", review.propertyId).eq("tokenIdentifier", review.tokenIdentifier),
+        )
+        .unique();
+      const payload = userPropertyReviewDoc(review);
+      if (existing) {
+        await db.patch(existing._id, payload);
+        const updated = await db.get(existing._id);
+        if (!updated) {
+          throw new Error("Missing user property review after patch.");
+        }
+        return mapUserPropertyReview(updated);
+      }
+      const id = await db.insert("userPropertyReviews", payload);
+      const created = await db.get(id);
+      if (!created) {
+        throw new Error("Missing user property review after insert.");
+      }
+      return mapUserPropertyReview(created);
+    },
+
+    async listUserPropertyReviews(propertyId) {
+      const docs = await db
+        .query("userPropertyReviews")
+        .withIndex("by_property_id", (q: any) => q.eq("propertyId", propertyId))
+        .collect();
+      return docs
+        .map(mapUserPropertyReview)
+        .sort((left: UserPropertyReview, right: UserPropertyReview) =>
+          left.updatedAt.localeCompare(right.updatedAt),
         );
     },
   };
@@ -390,13 +471,15 @@ function mapLiveReview(doc: any): LiveReviewSample {
   return {
     propertyId: doc.propertyId,
     sourceVendor: doc.sourceVendor,
-    sourceUrl: doc.sourceUrl,
+    sourceUrl: doc.sourceUrl ?? undefined,
     reviewIdHash: doc.reviewIdHash,
     headline: doc.headline ?? undefined,
     text: doc.text,
     rating: doc.rating ?? undefined,
     reviewDate: doc.reviewDate ?? undefined,
     reviewerType: doc.reviewerType ?? undefined,
+    tokenIdentifier: doc.tokenIdentifier ?? undefined,
+    sessionId: doc.sessionId ?? undefined,
     fetchedAt: doc.fetchedAt,
   };
 }
@@ -405,7 +488,12 @@ function mapSession(doc: any): StoredReviewSession {
   return {
     id: String(doc._id),
     propertyId: doc.propertyId,
+    tokenIdentifier: doc.tokenIdentifier ?? undefined,
     draftReview: doc.draftReview,
+    conversationStage: doc.conversationStage ?? "collecting_review",
+    clarifierCount: doc.clarifierCount ?? 0,
+    overallRating: doc.overallRating ?? undefined,
+    aspectRatings: doc.aspectRatings ?? undefined,
     selectedFacet: doc.selectedFacet ?? null,
     mentionedFacets: doc.mentionedFacets ?? [],
     likelyKnownFacets: doc.likelyKnownFacets ?? [],
@@ -478,6 +566,44 @@ function mapAnswer(doc: any): StoredFollowUpAnswer {
 
 function answerDoc(answer: Omit<StoredFollowUpAnswer, "id">) {
   return answer;
+}
+
+function liveReviewDoc(review: LiveReviewSample) {
+  return omitNullish({
+    propertyId: review.propertyId,
+    sourceVendor: review.sourceVendor,
+    sourceUrl: review.sourceUrl,
+    reviewIdHash: review.reviewIdHash,
+    headline: review.headline,
+    text: review.text,
+    rating: review.rating,
+    reviewDate: review.reviewDate,
+    reviewerType: review.reviewerType,
+    tokenIdentifier: review.tokenIdentifier,
+    sessionId: review.sessionId,
+    fetchedAt: review.fetchedAt,
+  });
+}
+
+function mapUserPropertyReview(doc: any): UserPropertyReview {
+  return {
+    id: String(doc._id),
+    propertyId: doc.propertyId,
+    tokenIdentifier: doc.tokenIdentifier,
+    sessionId: doc.sessionId,
+    reviewText: doc.reviewText,
+    overallRating: doc.overallRating ?? undefined,
+    aspectRatings: doc.aspectRatings ?? undefined,
+    sentiment: doc.sentiment,
+    answerCount: doc.answerCount,
+    factCount: doc.factCount,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+  };
+}
+
+function userPropertyReviewDoc(review: Omit<UserPropertyReview, "id">) {
+  return review;
 }
 
 function mapUpdate(doc: any): PropertyEvidenceUpdate {

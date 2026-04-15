@@ -6,10 +6,13 @@ import { describe, expect, it } from "vitest";
 import type { ReviewGapAIClient } from "../src/backend/ai.js";
 import {
   analyzeDraftReview,
+  confirmEnhancedReview,
   createReviewSession,
+  finalizeReviewPreview,
   getSessionSummary,
   selectNextQuestion,
   submitFollowUpAnswer,
+  updateStructuredReview,
 } from "../src/backend/service.js";
 import { loadRuntimeBundle } from "../src/backend/runtimeBundle.node.js";
 import { seedRuntimeBundle } from "../src/backend/runtimeBundle.js";
@@ -46,7 +49,13 @@ const throwingAiClient: ReviewGapAIClient = {
   generateQuestion: async () => {
     throw new Error("AI unavailable");
   },
+  generateClarifier: async () => {
+    throw new Error("AI unavailable");
+  },
   extractAnswerFacts: async () => {
+    throw new Error("AI unavailable");
+  },
+  generateEnhancedReview: async () => {
     throw new Error("AI unavailable");
   },
 };
@@ -74,33 +83,306 @@ describe("session flow", () => {
     expect(analysis.mentionedFacets).toContain("check_in");
   });
 
-  it("supports the analyze -> rank -> ask -> answer -> summary happy path", async () => {
+  it("supports the analyze -> ask -> answer -> preview happy path", async () => {
     const { store } = await createSeededStore();
     const session = await createReviewSession(store, { propertyId: PARKING_PROPERTY });
+    const draftReview = "The room was clean and the staff were nice.";
     const question = await selectNextQuestion(store, undefined, {
       sessionId: session.sessionId,
-      draftReview: "The room was clean and the staff were nice.",
+      draftReview,
     });
 
     expect(question.noFollowUp).toBe(false);
     expect(question.facet).toBe("amenities_parking");
 
-    const answer = await submitFollowUpAnswer(store, undefined, {
+    const answer = await submitFollowUpAnswer(store, {
       sessionId: session.sessionId,
       facet: "amenities_parking",
       answerText: "Parking was tight and we paid $18, but we still found a spot.",
     });
+    const preview = await finalizeReviewPreview(store, undefined, {
+      sessionId: session.sessionId,
+      draftReview,
+    });
     const summary = await getSessionSummary(store, session.sessionId);
 
-    expect(answer.usedFallback).toBe(true);
-    expect(answer.structuredFacts).toEqual(
+    expect(answer.answerRecorded).toBe(true);
+    expect(preview.structuredFacts).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ factType: "available" }),
         expect.objectContaining({ factType: "parking_fee", value: 18 }),
       ]),
     );
-    expect(summary.selectedFacet).toBe("amenities_parking");
-    expect(summary.accumulatedEvidenceUpdates.length).toBeGreaterThan(0);
+    expect(summary.selectedFacet).toBeNull();
+    expect(summary.accumulatedEvidenceUpdates.length).toBe(0);
+  });
+
+  it("persists structured ratings on the session and includes them in preview metadata", async () => {
+    const { store } = await createSeededStore();
+    const session = await createReviewSession(store, { propertyId: PARKING_PROPERTY });
+    await updateStructuredReview(store, {
+      sessionId: session.sessionId,
+      overallRating: 8,
+      aspectRatings: { service: 4, cleanliness: 5 },
+    });
+
+    const preview = await finalizeReviewPreview(store, undefined, {
+      sessionId: session.sessionId,
+      draftReview: "The room was clean and the staff were friendly throughout our stay.",
+    });
+    const updatedSession = await store.getReviewSession(session.sessionId);
+
+    expect(updatedSession?.overallRating).toBe(8);
+    expect(updatedSession?.aspectRatings).toEqual({ service: 4, cleanliness: 5 });
+    expect(preview.overallRating).toBe(8);
+    expect(preview.aspectRatings).toEqual({ service: 4, cleanliness: 5 });
+  });
+
+  it("keeps greetings in conversational clarification mode", async () => {
+    const { store } = await createSeededStore();
+    const session = await createReviewSession(store, { propertyId: CHECKIN_PROPERTY });
+
+    const nextTurn = await selectNextQuestion(store, undefined, {
+      sessionId: session.sessionId,
+      draftReview: "hi",
+    });
+
+    expect(nextTurn.turnType).toBe("clarify_review");
+    expect(nextTurn.facet).toBeNull();
+    expect(nextTurn.readinessReason).toBe("greeting_or_small_talk");
+    expect(await store.getLatestFollowUpQuestion(session.sessionId)).toBeNull();
+  });
+
+  it("returns a conversational clarifier for vague reviews", async () => {
+    const { store } = await createSeededStore();
+    const session = await createReviewSession(store, { propertyId: CHECKIN_PROPERTY });
+
+    const nextTurn = await selectNextQuestion(store, undefined, {
+      sessionId: session.sessionId,
+      draftReview: "bad stay",
+    });
+
+    expect(nextTurn.turnType).toBe("clarify_review");
+    expect(nextTurn.facet).toBeNull();
+    expect(nextTurn.noFollowUp).toBe(false);
+  });
+
+  it("keeps check-in questions retrospective instead of policy-style", async () => {
+    const { store } = await createSeededStore();
+    const session = await createReviewSession(store, { propertyId: CHECKIN_PROPERTY });
+
+    const nextTurn = await selectNextQuestion(store, undefined, {
+      sessionId: session.sessionId,
+      draftReview:
+        "The decor was nice, but service was lackluster and the room itself was only okay.",
+    });
+
+    if (nextTurn.turnType !== "facet_followup") {
+      throw new Error("Expected a facet follow-up turn.");
+    }
+
+    expect(nextTurn.questionText.toLowerCase()).not.toContain("arrive early");
+    expect(nextTurn.questionText.toLowerCase()).not.toContain("before booking");
+  });
+
+  it("projects an authenticated review into the live corpus and first-party evidence", async () => {
+    const { store } = await createSeededStore();
+    const before = await store.getProperty(PARKING_PROPERTY);
+
+    const session = await createReviewSession(store, {
+      propertyId: PARKING_PROPERTY,
+      draftReview: "Parking was cramped and the overnight fee felt excessive.",
+      tokenIdentifier: "clerk:user_1",
+    });
+    await updateStructuredReview(store, {
+      sessionId: session.sessionId,
+      overallRating: 6,
+    });
+    const preview = await finalizeReviewPreview(store, undefined, {
+      sessionId: session.sessionId,
+      draftReview: "Parking was cramped and the overnight fee felt excessive.",
+    });
+    await confirmEnhancedReview(store, {
+      sessionId: session.sessionId,
+      tokenIdentifier: "clerk:user_1",
+      finalReviewText: preview.reviewText,
+      structuredFacts: preview.structuredFacts,
+    });
+
+    const liveReviews = await store.listPropertyLiveReviews(PARKING_PROPERTY);
+    const firstPartyReviews = liveReviews.filter((review) => review.sourceVendor === "first_party");
+    const evidence = await store.listPropertyFacetEvidence(PARKING_PROPERTY, "amenities_parking");
+    const after = await store.getProperty(PARKING_PROPERTY);
+
+    expect(firstPartyReviews).toHaveLength(1);
+    expect(firstPartyReviews[0]).toEqual(
+      expect.objectContaining({
+        tokenIdentifier: "clerk:user_1",
+        sessionId: session.sessionId,
+      }),
+    );
+    expect(evidence).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sourceType: "first_party_review" }),
+      ]),
+    );
+    expect(after?.liveReviewCount).toBeGreaterThan(before?.liveReviewCount ?? 0);
+  });
+
+  it("upserts one first-party corpus review per user and property", async () => {
+    const { store } = await createSeededStore();
+
+    const firstSession = await createReviewSession(store, {
+      propertyId: PARKING_PROPERTY,
+      draftReview: "Parking was impossible the first time.",
+      tokenIdentifier: "clerk:user_1",
+    });
+    await updateStructuredReview(store, {
+      sessionId: firstSession.sessionId,
+      overallRating: 5,
+    });
+    const firstPreview = await finalizeReviewPreview(store, undefined, {
+      sessionId: firstSession.sessionId,
+      draftReview: "Parking was impossible the first time.",
+    });
+    await confirmEnhancedReview(store, {
+      sessionId: firstSession.sessionId,
+      tokenIdentifier: "clerk:user_1",
+      finalReviewText: firstPreview.reviewText,
+      structuredFacts: firstPreview.structuredFacts,
+    });
+    const secondSession = await createReviewSession(store, {
+      propertyId: PARKING_PROPERTY,
+      draftReview: "Parking was still tight but easier once we found the garage entrance.",
+      tokenIdentifier: "clerk:user_1",
+    });
+    await updateStructuredReview(store, {
+      sessionId: secondSession.sessionId,
+      overallRating: 7,
+    });
+    const secondPreview = await finalizeReviewPreview(store, undefined, {
+      sessionId: secondSession.sessionId,
+      draftReview: "Parking was still tight but easier once we found the garage entrance.",
+    });
+    await confirmEnhancedReview(store, {
+      sessionId: secondSession.sessionId,
+      tokenIdentifier: "clerk:user_1",
+      finalReviewText: secondPreview.reviewText,
+      structuredFacts: secondPreview.structuredFacts,
+    });
+
+    const liveReviews = await store.listPropertyLiveReviews(PARKING_PROPERTY);
+    const firstPartyReviews = liveReviews.filter((review) => review.sourceVendor === "first_party");
+
+    expect(firstPartyReviews).toHaveLength(1);
+    expect(firstPartyReviews[0]?.text).toContain("garage entrance");
+  });
+
+  it("ignores 'I don't know' answers when extracting facts and drafting the preview", async () => {
+    const { store } = await createSeededStore();
+    const session = await createReviewSession(store, { propertyId: PARKING_PROPERTY });
+    await submitFollowUpAnswer(store, {
+      sessionId: session.sessionId,
+      facet: "amenities_parking",
+      answerText: "I don't know",
+    });
+
+    const preview = await finalizeReviewPreview(store, undefined, {
+      sessionId: session.sessionId,
+      draftReview: "The room was clean and the staff were friendly throughout the stay.",
+    });
+
+    expect(preview.structuredFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          factType: "review_detail",
+          value: "The room was clean and the staff were friendly throughout the stay",
+        }),
+      ]),
+    );
+    expect(preview.structuredFacts).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ factType: "freeform_note", value: "I don't know" }),
+      ]),
+    );
+    expect(preview.reviewText.toLowerCase()).not.toContain("i don't know");
+  });
+
+  it("keeps preview text grounded in user input and surfaces draft details as facts", async () => {
+    const store = new InMemoryReviewGapStore();
+    await store.upsertProperty({
+      propertyId: "detail_grounding",
+      propertySummary: "Art deco hotel with free shuttle service and a bar/lounge.",
+      facetListingTexts: {},
+      demoFlags: [],
+    });
+    const session = await createReviewSession(store, {
+      propertyId: "detail_grounding",
+      draftReview: "The decor was great, staff was great, and there was a great shuttle service.",
+    });
+    await updateStructuredReview(store, {
+      sessionId: session.sessionId,
+      overallRating: 9,
+    });
+
+    const preview = await finalizeReviewPreview(store, undefined, {
+      sessionId: session.sessionId,
+      draftReview: "The decor was great, staff was great, and there was a great shuttle service.",
+    });
+
+    expect(preview.reviewText.toLowerCase()).not.toContain("art deco hotel");
+    expect(preview.structuredFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ factType: "review_detail", value: "The decor was great" }),
+        expect.objectContaining({ factType: "review_detail", value: "staff was great" }),
+        expect.objectContaining({
+          factType: "review_detail",
+          value: "and there was a great shuttle service",
+        }),
+      ]),
+    );
+  });
+
+  it("recomputes a blended property rating when a first-party rating is saved", async () => {
+    const store = new InMemoryReviewGapStore();
+    await store.upsertProperty({
+      propertyId: "rating_synth",
+      propertySummary: "Synthetic rating property",
+      guestRating: 8,
+      facetListingTexts: {},
+      demoFlags: [],
+    });
+    const session = await createReviewSession(store, {
+      propertyId: "rating_synth",
+      draftReview: "The stay was strong overall.",
+      tokenIdentifier: "clerk:user_7",
+    });
+    await updateStructuredReview(store, {
+      sessionId: session.sessionId,
+      overallRating: 10,
+      aspectRatings: { service: 5, cleanliness: 5, amenities: 4, value: 4 },
+    });
+    const preview = await finalizeReviewPreview(store, undefined, {
+      sessionId: session.sessionId,
+      draftReview: "The stay was strong overall.",
+    });
+
+    await confirmEnhancedReview(
+      store,
+      {
+        sessionId: session.sessionId,
+        tokenIdentifier: "clerk:user_7",
+        finalReviewText: preview.reviewText,
+        structuredFacts: preview.structuredFacts,
+      },
+      { guestRating: 8, reviewCount: 4 },
+    );
+
+    const property = await store.getProperty("rating_synth");
+    const reviews = await store.listUserPropertyReviews("rating_synth");
+
+    expect(property?.guestRating).toBe(8.4);
+    expect(reviews[0]?.overallRating).toBe(10);
   });
 
   it("chooses another facet when the draft already covers check-in", async () => {
@@ -182,9 +464,11 @@ describe("session flow", () => {
 
     const question = await selectNextQuestion(store, undefined, {
       sessionId: session.sessionId,
-      draftReview: "Nice stay overall.",
+      draftReview:
+        "The room was clean, check-in was smooth, and the staff were friendly throughout the stay.",
     });
 
+    expect(question.turnType).toBe("no_follow_up");
     expect(question.noFollowUp).toBe(true);
     expect(question.facet).toBeNull();
   });
@@ -194,9 +478,11 @@ describe("session flow", () => {
     const session = await createReviewSession(store, { propertyId: PARKING_PROPERTY });
     const question = await selectNextQuestion(store, undefined, {
       sessionId: session.sessionId,
-      draftReview: "Good location and comfortable bed.",
+      draftReview:
+        "The bed was comfortable, the room stayed quiet at night, and the staff were friendly throughout.",
     });
 
+    expect(question.turnType).toBe("facet_followup");
     expect(question.facet).toBe("amenities_parking");
   });
 
@@ -205,9 +491,11 @@ describe("session flow", () => {
     const session = await createReviewSession(store, { propertyId: BREAKFAST_PROPERTY });
     const question = await selectNextQuestion(store, undefined, {
       sessionId: session.sessionId,
-      draftReview: "Room was clean and quiet.",
+      draftReview:
+        "The room was clean, the bed was comfortable, and the hotel stayed quiet overnight.",
     });
 
+    expect(question.turnType).toBe("facet_followup");
     expect(question.facet).toBe("amenities_breakfast");
   });
 
@@ -233,32 +521,56 @@ describe("session flow", () => {
     });
     const question = await selectNextQuestion(store, undefined, {
       sessionId: session.sessionId,
-      draftReview: "Nice stay.",
+      draftReview:
+        "The room was clean, the staff were helpful, and the stay felt easy overall.",
     });
 
     expect(question.facet).not.toBe("pet");
   });
 
-  it("stores extracted facts in the summary without mutating property listing data", async () => {
+  it("keeps listing text stable while only persisting evidence after confirmation", async () => {
     const { store } = await createSeededStore();
     const before = await store.getProperty(PARKING_PROPERTY);
     const session = await createReviewSession(store, { propertyId: PARKING_PROPERTY });
+    const draftReview =
+      "The staff were friendly, the room was quiet, and the bed was comfortable during our stay.";
     const question = await selectNextQuestion(store, undefined, {
       sessionId: session.sessionId,
-      draftReview: "Friendly staff.",
+      draftReview,
     });
 
-    await submitFollowUpAnswer(store, undefined, {
+    expect(question.turnType).toBe("facet_followup");
+    await submitFollowUpAnswer(store, {
       sessionId: session.sessionId,
       facet: question.facet!,
       answerText: "Parking was difficult and cost $12.",
     });
-    const after = await store.getProperty(PARKING_PROPERTY);
+    await updateStructuredReview(store, {
+      sessionId: session.sessionId,
+      overallRating: 7,
+    });
+    const preview = await finalizeReviewPreview(store, undefined, {
+      sessionId: session.sessionId,
+      draftReview,
+    });
+    const afterPreview = await store.getProperty(PARKING_PROPERTY);
     const summary = await getSessionSummary(store, session.sessionId);
 
-    expect(after?.facetListingTexts).toEqual(before?.facetListingTexts);
-    expect(summary.extractedFacts.length).toBeGreaterThan(0);
-    expect(summary.accumulatedEvidenceUpdates.length).toBeGreaterThan(0);
+    expect(afterPreview?.facetListingTexts).toEqual(before?.facetListingTexts);
+    expect(summary.extractedFacts.length).toBe(0);
+    expect(summary.accumulatedEvidenceUpdates.length).toBe(0);
+
+    await confirmEnhancedReview(store, {
+      sessionId: session.sessionId,
+      tokenIdentifier: "clerk:user_2",
+      finalReviewText: preview.reviewText,
+      structuredFacts: preview.structuredFacts,
+    });
+    const afterConfirm = await store.getProperty(PARKING_PROPERTY);
+    const confirmedSummary = await getSessionSummary(store, session.sessionId);
+
+    expect(afterConfirm?.facetListingTexts).toEqual(before?.facetListingTexts);
+    expect(confirmedSummary.accumulatedEvidenceUpdates.length).toBeGreaterThan(0);
   });
 
   it("lets live facet signals change the next selected question without rewriting base metrics", async () => {
@@ -306,7 +618,8 @@ describe("session flow", () => {
     const beforeSession = await createReviewSession(store, { propertyId: "live_override" });
     const beforeQuestion = await selectNextQuestion(store, undefined, {
       sessionId: beforeSession.sessionId,
-      draftReview: "Quiet room and friendly staff.",
+      draftReview:
+        "The room stayed quiet at night, the staff were friendly, and the bed was comfortable.",
     });
     expect(beforeQuestion.facet).toBe("check_in");
 
@@ -340,7 +653,8 @@ describe("session flow", () => {
     const afterSession = await createReviewSession(store, { propertyId: "live_override" });
     const afterQuestion = await selectNextQuestion(store, undefined, {
       sessionId: afterSession.sessionId,
-      draftReview: "Quiet room and friendly staff.",
+      draftReview:
+        "The room stayed quiet at night, the staff were friendly, and the bed was comfortable.",
     });
 
     expect(afterQuestion.facet).toBe("amenities_breakfast");

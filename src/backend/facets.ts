@@ -64,9 +64,9 @@ export const FACET_POLICIES: Record<RuntimeFacet, RuntimeFacetPolicy> = {
     importance: 0.84,
     listingFields: ["check_out_time", "check_out_policy"],
     questionTemplate:
-      "Before you submit: was checkout straightforward, and did the timing work as expected?",
+      "Before you submit: how did checkout go for you, especially timing or any unexpected charges?",
     voiceTemplate:
-      "Before you submit, was checkout straightforward, and did the timing work as expected?",
+      "Before you submit, how did checkout go for you, especially timing or any unexpected charges?",
     answerHint: "Look for checkout timing, charges, flexibility, or late checkout availability.",
     reviewPatterns: compile([
       "\\bcheck[ -]?out\\b",
@@ -120,9 +120,9 @@ export const FACET_POLICIES: Record<RuntimeFacet, RuntimeFacetPolicy> = {
     importance: 0.7,
     listingFields: ["know_before_you_go"],
     questionTemplate:
-      "Anything guests should know before booking, like fees, noise, or restrictions that caught you off guard?",
+      "Was there anything about the stay, like noise, fees, or restrictions, that caught you off guard?",
     voiceTemplate:
-      "Anything guests should know before booking, like fees, noise, or restrictions that caught you off guard?",
+      "Was there anything about the stay, like noise, fees, or restrictions, that caught you off guard?",
     answerHint: "Look for construction, noise, deposits, restrictions, or unexpected charges.",
     reviewPatterns: compile([
       "\\bconstruction\\b",

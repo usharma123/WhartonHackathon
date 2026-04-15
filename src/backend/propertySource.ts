@@ -33,6 +33,12 @@ export interface ExpediaReviewSnippet {
   reviewerType?: string;
 }
 
+export interface ReviewSnippet {
+  headline?: string;
+  text: string;
+  reviewDate?: string;
+}
+
 export interface ExpediaSnapshot {
   sourceVendor: PropertySourceVendor;
   sourceUrl: string;
@@ -225,8 +231,24 @@ export function deriveLiveFacetSignals(
   classifierArtifact: FacetClassifierArtifact | undefined,
   fetchedAt: string,
 ): PropertyFacetLiveSignal[] {
+  return deriveLiveFacetSignalsFromReviewSnippets(
+    propertyId,
+    snapshot.facetListingTexts,
+    snapshot.reviews,
+    classifierArtifact,
+    fetchedAt,
+  );
+}
+
+export function deriveLiveFacetSignalsFromReviewSnippets(
+  propertyId: string,
+  facetListingTexts: Partial<Record<RuntimeFacet, string>>,
+  reviews: ReviewSnippet[],
+  classifierArtifact: FacetClassifierArtifact | undefined,
+  fetchedAt: string,
+): PropertyFacetLiveSignal[] {
   return ALL_RUNTIME_FACETS.map((facet) => {
-    const supportingReviews = snapshot.reviews.filter((review) =>
+    const supportingReviews = reviews.filter((review) =>
       reviewMentionsFacet(review.text, facet, classifierArtifact),
     );
     const conflictingReviews = supportingReviews.filter((review) =>
@@ -238,14 +260,14 @@ export function deriveLiveFacetSignals(
     return {
       propertyId,
       facet,
-      mentionRate: roundRate(supportingReviews.length / Math.max(1, snapshot.reviews.length)),
-      conflictScore: snapshot.facetListingTexts[facet]
-        ? roundRate(conflictingReviews.length / Math.max(1, snapshot.reviews.length))
+      mentionRate: roundRate(supportingReviews.length / Math.max(1, reviews.length)),
+      conflictScore: facetListingTexts[facet]
+        ? roundRate(conflictingReviews.length / Math.max(1, reviews.length))
         : 0,
       latestReviewDate,
       daysSince: latestReviewDate ? daysSinceIsoDate(latestReviewDate, fetchedAt) : 9999,
-      listingTextPresent: Boolean(snapshot.facetListingTexts[facet]),
-      reviewCountSampled: snapshot.reviews.length,
+      listingTextPresent: Boolean(facetListingTexts[facet]),
+      reviewCountSampled: reviews.length,
       supportSnippetCount: supportingReviews.length,
       fetchedAt,
     };
@@ -257,14 +279,17 @@ export function buildExpediaFacetEvidence(
   snapshot: ExpediaSnapshot,
   classifierArtifact: FacetClassifierArtifact | undefined,
 ): Record<RuntimeFacet, PropertyFacetEvidence[]> {
-  const evidence = Object.fromEntries(
-    ALL_RUNTIME_FACETS.map((facet) => [facet, [] as PropertyFacetEvidence[]]),
-  ) as Record<RuntimeFacet, PropertyFacetEvidence[]>;
+  const evidence = buildFacetEvidenceFromReviewSnippets(
+    propertyId,
+    "expedia_review",
+    snapshot.reviews,
+    classifierArtifact,
+  );
 
   for (const facet of ALL_RUNTIME_FACETS) {
     const listingText = snapshot.facetListingTexts[facet];
     if (listingText) {
-      evidence[facet].push({
+      evidence[facet].unshift({
         propertyId,
         facet,
         sourceType: "expedia_listing",
@@ -272,14 +297,30 @@ export function buildExpediaFacetEvidence(
         evidenceScore: 0.82,
       });
     }
-    const supportingReviews = snapshot.reviews
+  }
+
+  return evidence;
+}
+
+export function buildFacetEvidenceFromReviewSnippets(
+  propertyId: string,
+  sourceType: "expedia_review" | "first_party_review",
+  reviews: ReviewSnippet[],
+  classifierArtifact: FacetClassifierArtifact | undefined,
+): Record<RuntimeFacet, PropertyFacetEvidence[]> {
+  const evidence = Object.fromEntries(
+    ALL_RUNTIME_FACETS.map((facet) => [facet, [] as PropertyFacetEvidence[]]),
+  ) as Record<RuntimeFacet, PropertyFacetEvidence[]>;
+
+  for (const facet of ALL_RUNTIME_FACETS) {
+    const supportingReviews = reviews
       .filter((review) => reviewMentionsFacet(review.text, facet, classifierArtifact))
       .slice(0, 2);
     for (const review of supportingReviews) {
       evidence[facet].push({
         propertyId,
         facet,
-        sourceType: "expedia_review",
+        sourceType,
         snippet: truncateSnippet(
           [review.reviewDate, review.headline, review.text].filter(Boolean).join(" — "),
         ),
@@ -316,6 +357,27 @@ export function buildLiveReviewSamples(
     reviewerType: review.reviewerType,
     fetchedAt,
   }));
+}
+
+export function buildFirstPartyLiveReviewSample(args: {
+  propertyId: string;
+  tokenIdentifier: string;
+  sessionId: string;
+  text: string;
+  reviewDate: string;
+}): LiveReviewSample {
+  return {
+    propertyId: args.propertyId,
+    sourceVendor: "first_party",
+    reviewIdHash: stableReviewHash(
+      ["first_party", args.propertyId, args.tokenIdentifier].join("|"),
+    ),
+    text: args.text,
+    reviewDate: args.reviewDate,
+    tokenIdentifier: args.tokenIdentifier,
+    sessionId: args.sessionId,
+    fetchedAt: args.reviewDate,
+  };
 }
 
 function extractAmenities(markdown: string): string | undefined {

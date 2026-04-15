@@ -112,16 +112,62 @@ export const replacePropertyFacetVendorEvidence = internalMutationGeneric({
     ),
 });
 
+export const listPropertyLiveReviews = internalQueryGeneric({
+  args: { propertyId: v.string() },
+  handler: async (ctx, args) =>
+    createConvexStore(ctx.db).listPropertyLiveReviews(args.propertyId),
+});
+
 export const replacePropertyLiveReviews = internalMutationGeneric({
   args: { propertyId: v.string(), reviews: v.array(v.any()) },
   handler: async (ctx, args) =>
     createConvexStore(ctx.db).replacePropertyLiveReviews(args.propertyId, args.reviews),
 });
 
+export const upsertPropertyLiveReview = internalMutationGeneric({
+  args: { review: v.any() },
+  handler: async (ctx, args) =>
+    createConvexStore(ctx.db).upsertPropertyLiveReview(args.review),
+});
+
+export const replacePropertyFacetSourceEvidence = internalMutationGeneric({
+  args: {
+    propertyId: v.string(),
+    facet: v.string(),
+    sourcePrefix: v.string(),
+    evidence: v.array(v.any()),
+  },
+  handler: async (ctx, args) =>
+    createConvexStore(ctx.db).replacePropertyFacetSourceEvidence(
+      args.propertyId,
+      args.facet as any,
+      args.sourcePrefix,
+      args.evidence,
+    ),
+});
+
 export const listPropertyEvidenceUpdatesBySession = internalQueryGeneric({
   args: { sessionId: v.string() },
   handler: async (ctx, args) =>
     createConvexStore(ctx.db).listPropertyEvidenceUpdatesBySession(args.sessionId),
+});
+
+export const listFollowUpAnswers = internalQueryGeneric({
+  args: { sessionId: v.string() },
+  handler: async (ctx, args) =>
+    createConvexStore(ctx.db).listFollowUpAnswers(args.sessionId),
+});
+
+export const upsertUserPropertyReview = internalMutationGeneric({
+  args: { review: v.any() },
+  handler: async (ctx, args) =>
+    createConvexStore(ctx.db).upsertUserPropertyReview(args.review),
+});
+
+export const listUserPropertyReviews = internalQueryGeneric({
+  args: { propertyId: v.string() },
+  handler: async (ctx, args) =>
+    createConvexStore(ctx.db).listUserPropertyReviews(args.propertyId),
 });
 
 export const getFacetClassifierArtifact = internalQueryGeneric({
@@ -132,5 +178,28 @@ export const getFacetClassifierArtifact = internalQueryGeneric({
       .withIndex("by_artifact_type", (q) => q.eq("artifactType", "facet_classifier"))
       .unique();
     return doc ?? null;
+  },
+});
+
+export const getSourceReviewAggregate = internalQueryGeneric({
+  args: { propertyId: v.string() },
+  handler: async (ctx, args) => {
+    const [sourceDoc, reviews] = await Promise.all([
+      ctx.db
+        .query("sourceProperties")
+        .withIndex("by_property_id", (q: any) => q.eq("propertyId", args.propertyId))
+        .unique(),
+      ctx.db
+        .query("sourceReviews")
+        .withIndex("by_property_id", (q: any) => q.eq("propertyId", args.propertyId))
+        .collect(),
+    ]);
+    const raw = sourceDoc?.guestRatingAvgExpedia;
+    const parsed =
+      typeof raw === "string" && raw.trim().length > 0 ? Number.parseFloat(raw) : Number.NaN;
+    return {
+      reviewCount: reviews.length,
+      guestRating: Number.isFinite(parsed) ? parsed : null,
+    };
   },
 });

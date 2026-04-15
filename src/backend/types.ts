@@ -2,8 +2,24 @@ import type { RuntimeFacet } from "./facets.js";
 
 export type ReliabilityClass = "high" | "medium" | "low" | "blocked";
 export type SessionSentiment = "positive" | "negative" | "mixed" | "neutral";
-export type PropertySourceVendor = "expedia";
+export type PropertySourceVendor = "expedia" | "first_party";
 export type PropertyValidationStatus = "idle" | "refreshing" | "success" | "error";
+export type ConversationStage =
+  | "collecting_review"
+  | "facet_followup"
+  | "awaiting_confirmation"
+  | "complete";
+export type ReviewReadinessReason =
+  | "greeting_or_small_talk"
+  | "too_short"
+  | "lacks_stay_details"
+  | "needs_specifics";
+export type AspectRatings = {
+  service?: number;
+  cleanliness?: number;
+  amenities?: number;
+  value?: number;
+};
 
 export interface PropertyRecord {
   propertyId: string;
@@ -48,7 +64,8 @@ export interface PropertyFacetEvidence {
     | "listing_summary"
     | "demo_scenario"
     | "expedia_listing"
-    | "expedia_review";
+    | "expedia_review"
+    | "first_party_review";
   snippet: string;
   acquisitionDate?: string;
   evidenceScore?: number;
@@ -57,14 +74,31 @@ export interface PropertyFacetEvidence {
 export interface LiveReviewSample {
   propertyId: string;
   sourceVendor: PropertySourceVendor;
-  sourceUrl: string;
+  sourceUrl?: string;
   reviewIdHash: string;
   headline?: string;
   text: string;
   rating?: number;
   reviewDate?: string;
   reviewerType?: string;
+  tokenIdentifier?: string;
+  sessionId?: string;
   fetchedAt: string;
+}
+
+export interface UserPropertyReview {
+  id: string;
+  propertyId: string;
+  tokenIdentifier: string;
+  sessionId: string;
+  reviewText: string;
+  overallRating?: number;
+  aspectRatings?: AspectRatings;
+  sentiment: SessionSentiment;
+  answerCount: number;
+  factCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface PropertyFacetLiveSignal {
@@ -133,6 +167,9 @@ export interface ReviewAnalysisResult {
   mentionedFacets: RuntimeFacet[];
   likelyKnownFacets: RuntimeFacet[];
   sentiment: SessionSentiment;
+  reviewReady: boolean;
+  readinessReason: ReviewReadinessReason | null;
+  suggestedClarifierPrompt: string | null;
   mlMentionProbByFacet: Partial<Record<RuntimeFacet, number>>;
   mlLikelyKnownByFacet: Partial<Record<RuntimeFacet, number>>;
   usedML: boolean;
@@ -157,30 +194,74 @@ export interface PropertyCardDelta {
   addedFacts: StructuredFact[];
 }
 
-export interface SelectNextQuestionResult {
-  facet: RuntimeFacet | null;
-  questionText: string | null;
-  voiceText: string | null;
-  whyThisQuestion: string;
-  scoreBreakdown: ScoreBreakdown | null;
-  supportingEvidence: PropertyFacetEvidence[];
-  analysis: ReviewAnalysisResult | null;
-  questionSource: SourceDiagnostics | null;
+type SelectNextQuestionBase = {
+  assistantText: string;
+  analysis: ReviewAnalysisResult;
   noFollowUp: boolean;
-}
+};
+
+export type SelectNextQuestionResult =
+  | (SelectNextQuestionBase & {
+      turnType: "clarify_review";
+      readinessReason: ReviewReadinessReason;
+      facet: null;
+      questionText: null;
+      voiceText: null;
+      whyThisQuestion: string;
+      scoreBreakdown: null;
+      supportingEvidence: [];
+      questionSource: SourceDiagnostics | null;
+      noFollowUp: false;
+    })
+  | (SelectNextQuestionBase & {
+      turnType: "facet_followup";
+      readinessReason: null;
+      facet: RuntimeFacet;
+      questionText: string;
+      voiceText: string;
+      whyThisQuestion: string;
+      scoreBreakdown: ScoreBreakdown;
+      supportingEvidence: PropertyFacetEvidence[];
+      questionSource: SourceDiagnostics;
+      noFollowUp: false;
+    })
+  | (SelectNextQuestionBase & {
+      turnType: "no_follow_up";
+      readinessReason: null;
+      facet: null;
+      questionText: null;
+      voiceText: null;
+      whyThisQuestion: string;
+      scoreBreakdown: null;
+      supportingEvidence: [];
+      questionSource: null;
+      noFollowUp: true;
+    });
 
 export interface SubmitFollowUpAnswerResult {
+  answerRecorded: boolean;
+  answerCount: number;
+}
+
+export interface FinalizeReviewPreviewResult {
+  reviewText: string;
   structuredFacts: StructuredFact[];
-  confidence: number;
-  propertyCardDelta: PropertyCardDelta;
+  overallRating?: number;
+  aspectRatings?: AspectRatings;
   usedOpenAI: boolean;
   usedFallback: boolean;
+  confirmationPrompt: string;
 }
 
 export interface StoredReviewSession {
   id: string;
   propertyId: string;
+  tokenIdentifier?: string;
   draftReview: string;
+  conversationStage: ConversationStage;
+  clarifierCount: number;
+  overallRating?: number;
+  aspectRatings?: AspectRatings;
   selectedFacet: RuntimeFacet | null;
   mentionedFacets: RuntimeFacet[];
   likelyKnownFacets: RuntimeFacet[];
@@ -235,6 +316,7 @@ export interface PropertyEvidenceUpdate {
 export interface CreateReviewSessionInput {
   propertyId: string;
   draftReview?: string;
+  tokenIdentifier?: string;
 }
 
 export interface CreateReviewSessionResult {
@@ -258,6 +340,24 @@ export interface SubmitFollowUpAnswerInput {
   sessionId: string;
   facet: RuntimeFacet;
   answerText: string;
+}
+
+export interface FinalizeReviewPreviewInput {
+  sessionId: string;
+  draftReview: string;
+  revisionNotes?: string[];
+}
+
+export interface UpdateStructuredReviewInput {
+  sessionId: string;
+  overallRating: number;
+  aspectRatings?: AspectRatings;
+}
+
+export interface ConfirmEnhancedReviewInput {
+  sessionId: string;
+  finalReviewText: string;
+  structuredFacts: StructuredFact[];
 }
 
 export interface SessionSummary {

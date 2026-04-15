@@ -14,8 +14,11 @@ const refs = {
   listPropertyFacetLiveSignals: "reviewGapInternal:listPropertyFacetLiveSignals",
   replacePropertyFacetLiveSignals: "reviewGapInternal:replacePropertyFacetLiveSignals",
   listPropertyFacetEvidence: "reviewGapInternal:listPropertyFacetEvidence",
+  listPropertyLiveReviews: "reviewGapInternal:listPropertyLiveReviews",
   replacePropertyFacetVendorEvidence: "reviewGapInternal:replacePropertyFacetVendorEvidence",
+  replacePropertyFacetSourceEvidence: "reviewGapInternal:replacePropertyFacetSourceEvidence",
   replacePropertyLiveReviews: "reviewGapInternal:replacePropertyLiveReviews",
+  upsertPropertyLiveReview: "reviewGapInternal:upsertPropertyLiveReview",
   createReviewSession: "reviewGapInternal:createReviewSession",
   getReviewSession: "reviewGapInternal:getReviewSession",
   updateReviewSession: "reviewGapInternal:updateReviewSession",
@@ -23,8 +26,11 @@ const refs = {
   getLatestFollowUpQuestion: "reviewGapInternal:getLatestFollowUpQuestion",
   createFollowUpAnswer: "reviewGapInternal:createFollowUpAnswer",
   getLatestFollowUpAnswer: "reviewGapInternal:getLatestFollowUpAnswer",
+  listFollowUpAnswers: "reviewGapInternal:listFollowUpAnswers",
   appendPropertyEvidenceUpdates: "reviewGapInternal:appendPropertyEvidenceUpdates",
   listPropertyEvidenceUpdatesBySession: "reviewGapInternal:listPropertyEvidenceUpdatesBySession",
+  upsertUserPropertyReview: "reviewGapInternal:upsertUserPropertyReview",
+  listUserPropertyReviews: "reviewGapInternal:listUserPropertyReviews",
   getFacetClassifierArtifact: "reviewGapInternal:getFacetClassifierArtifact",
 } as const;
 
@@ -69,11 +75,14 @@ export function createConvexActionStore(ctx: ActionCtx): ReviewGapStore {
         evidence,
       });
     },
-    async listPropertyLiveReviews() {
-      throw new Error("listPropertyLiveReviews is not supported from runtime actions.");
+    async listPropertyLiveReviews(propertyId) {
+      return ctx.runQuery(refs.listPropertyLiveReviews as any, { propertyId });
     },
     async replacePropertyLiveReviews(propertyId, reviews) {
       return ctx.runMutation(refs.replacePropertyLiveReviews as any, { propertyId, reviews });
+    },
+    async upsertPropertyLiveReview(review) {
+      return ctx.runMutation(refs.upsertPropertyLiveReview as any, { review });
     },
     async createReviewSession(session) {
       return ctx.runMutation(refs.createReviewSession as any, { session });
@@ -96,11 +105,28 @@ export function createConvexActionStore(ctx: ActionCtx): ReviewGapStore {
     async getLatestFollowUpAnswer(sessionId) {
       return ctx.runQuery(refs.getLatestFollowUpAnswer as any, { sessionId });
     },
+    async listFollowUpAnswers(sessionId) {
+      return ctx.runQuery(refs.listFollowUpAnswers as any, { sessionId });
+    },
     async appendPropertyEvidenceUpdates(updates) {
       return ctx.runMutation(refs.appendPropertyEvidenceUpdates as any, { updates });
     },
     async listPropertyEvidenceUpdatesBySession(sessionId) {
       return ctx.runQuery(refs.listPropertyEvidenceUpdatesBySession as any, { sessionId });
+    },
+    async replacePropertyFacetSourceEvidence(propertyId, facet, sourcePrefix, evidence) {
+      return ctx.runMutation(refs.replacePropertyFacetSourceEvidence as any, {
+        propertyId,
+        facet,
+        sourcePrefix,
+        evidence,
+      });
+    },
+    async upsertUserPropertyReview(review) {
+      return ctx.runMutation(refs.upsertUserPropertyReview as any, { review });
+    },
+    async listUserPropertyReviews(propertyId) {
+      return ctx.runQuery(refs.listUserPropertyReviews as any, { propertyId });
     },
   };
 }

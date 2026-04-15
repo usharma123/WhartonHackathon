@@ -9,6 +9,7 @@ import type {
   StoredFollowUpAnswer,
   StoredFollowUpQuestion,
   StoredReviewSession,
+  UserPropertyReview,
 } from "./types.js";
 import { applyLiveSignalToMetric } from "./scoring.js";
 
@@ -45,6 +46,7 @@ export interface ReviewGapStore {
     propertyId: string,
     reviews: LiveReviewSample[],
   ): Promise<void>;
+  upsertPropertyLiveReview(review: LiveReviewSample): Promise<void>;
   createReviewSession(
     session: Omit<StoredReviewSession, "id">,
   ): Promise<StoredReviewSession>;
@@ -63,12 +65,23 @@ export interface ReviewGapStore {
     answer: Omit<StoredFollowUpAnswer, "id">,
   ): Promise<StoredFollowUpAnswer>;
   getLatestFollowUpAnswer(sessionId: string): Promise<StoredFollowUpAnswer | null>;
+  listFollowUpAnswers(sessionId: string): Promise<StoredFollowUpAnswer[]>;
   appendPropertyEvidenceUpdates(
     updates: Array<Omit<PropertyEvidenceUpdate, "id">>,
   ): Promise<PropertyEvidenceUpdate[]>;
   listPropertyEvidenceUpdatesBySession(
     sessionId: string,
   ): Promise<PropertyEvidenceUpdate[]>;
+  replacePropertyFacetSourceEvidence(
+    propertyId: string,
+    facet: PropertyFacetMetric["facet"],
+    sourcePrefix: string,
+    evidence: PropertyFacetEvidence[],
+  ): Promise<void>;
+  upsertUserPropertyReview(
+    review: Omit<UserPropertyReview, "id">,
+  ): Promise<UserPropertyReview>;
+  listUserPropertyReviews(propertyId: string): Promise<UserPropertyReview[]>;
 }
 
 export class InMemoryReviewGapStore implements ReviewGapStore {
@@ -81,11 +94,13 @@ export class InMemoryReviewGapStore implements ReviewGapStore {
   private readonly questions = new Map<string, StoredFollowUpQuestion>();
   private readonly answers = new Map<string, StoredFollowUpAnswer>();
   private readonly updates = new Map<string, PropertyEvidenceUpdate>();
+  private readonly userReviews = new Map<string, UserPropertyReview>();
   private readonly counters = {
     session: 0,
     question: 0,
     answer: 0,
     update: 0,
+    review: 0,
   };
 
   now(): string {
@@ -242,6 +257,10 @@ export class InMemoryReviewGapStore implements ReviewGapStore {
     }
   }
 
+  async upsertPropertyLiveReview(review: LiveReviewSample): Promise<void> {
+    this.liveReviews.set(reviewKey(review), review);
+  }
+
   async createReviewSession(
     session: Omit<StoredReviewSession, "id">,
   ): Promise<StoredReviewSession> {
@@ -295,6 +314,12 @@ export class InMemoryReviewGapStore implements ReviewGapStore {
     return latestBySession(this.answers, sessionId);
   }
 
+  async listFollowUpAnswers(sessionId: string): Promise<StoredFollowUpAnswer[]> {
+    return [...this.answers.values()]
+      .filter((answer) => answer.sessionId === sessionId)
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  }
+
   async appendPropertyEvidenceUpdates(
     updates: Array<Omit<PropertyEvidenceUpdate, "id">>,
   ): Promise<PropertyEvidenceUpdate[]> {
@@ -316,6 +341,48 @@ export class InMemoryReviewGapStore implements ReviewGapStore {
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
   }
 
+  async replacePropertyFacetSourceEvidence(
+    propertyId: string,
+    facet: PropertyFacetMetric["facet"],
+    sourcePrefix: string,
+    evidence: PropertyFacetEvidence[],
+  ): Promise<void> {
+    for (const key of [...this.evidence.keys()]) {
+      const item = this.evidence.get(key);
+      if (
+        item &&
+        item.propertyId === propertyId &&
+        item.facet === facet &&
+        item.sourceType.startsWith(sourcePrefix)
+      ) {
+        this.evidence.delete(key);
+      }
+    }
+    for (const item of evidence) {
+      this.evidence.set(evidenceKey(item), item);
+    }
+  }
+
+  async upsertUserPropertyReview(
+    review: Omit<UserPropertyReview, "id">,
+  ): Promise<UserPropertyReview> {
+    const key = userReviewKey(review.propertyId, review.tokenIdentifier);
+    const existing = this.userReviews.get(key);
+    const stored: UserPropertyReview = {
+      ...review,
+      id: existing?.id ?? this.nextId("review"),
+      createdAt: existing?.createdAt ?? review.createdAt,
+    };
+    this.userReviews.set(key, stored);
+    return stored;
+  }
+
+  async listUserPropertyReviews(propertyId: string): Promise<UserPropertyReview[]> {
+    return [...this.userReviews.values()]
+      .filter((review) => review.propertyId === propertyId)
+      .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt));
+  }
+
   private nextId(prefix: keyof InMemoryReviewGapStore["counters"]): string {
     this.counters[prefix] += 1;
     return `${prefix}_${this.counters[prefix]}`;
@@ -331,7 +398,11 @@ function evidenceKey(evidence: PropertyFacetEvidence): string {
 }
 
 function reviewKey(review: LiveReviewSample): string {
-  return `${review.propertyId}:${review.reviewIdHash}`;
+  return `${review.propertyId}:${review.sourceVendor}:${review.reviewIdHash}`;
+}
+
+function userReviewKey(propertyId: string, tokenIdentifier: string): string {
+  return `${propertyId}:${tokenIdentifier}`;
 }
 
 function latestBySession<T extends { sessionId: string; createdAt: string }>(

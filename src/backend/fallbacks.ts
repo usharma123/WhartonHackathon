@@ -1,5 +1,7 @@
 import { FACET_POLICIES, facetLabel, type RuntimeFacet } from "./facets.js";
 import type {
+  AspectRatings,
+  ReviewReadinessReason,
   PropertyRecord,
   ReviewAnalysisResult,
   SessionSentiment,
@@ -36,6 +38,107 @@ const NEGATIVE_CUES = [
   "unexpected",
 ];
 
+const GREETING_ONLY_PATTERN =
+  /^(?:hi|hello|hey|yo|howdy|hi there|hello there|good morning|good afternoon|good evening|sup|what'?s up)[!. ]*$/i;
+const EXPERIENCE_TERMS = [
+  "room",
+  "staff",
+  "desk",
+  "service",
+  "food",
+  "breakfast",
+  "parking",
+  "pool",
+  "check-in",
+  "check in",
+  "checkout",
+  "check-out",
+  "hotel",
+  "stay",
+  "bed",
+  "bathroom",
+  "noise",
+  "fee",
+  "charge",
+  "clean",
+  "dirty",
+  "rude",
+  "friendly",
+  "wait",
+  "waiting",
+  "arrived",
+  "arrival",
+  "stayed",
+  "late",
+  "early",
+];
+
+export function analyzeReviewReadiness(args: {
+  draftReview: string;
+  eligibleFacets: RuntimeFacet[];
+  mentionedFacets: RuntimeFacet[];
+}): {
+  reviewReady: boolean;
+  readinessReason: ReviewReadinessReason | null;
+} {
+  const text = args.draftReview.trim();
+  const lower = text.toLowerCase();
+  const words = lower.match(/\b[\w'-]+\b/g) ?? [];
+  const wordCount = words.length;
+  const hasGreetingOnly = GREETING_ONLY_PATTERN.test(text);
+  const hasExperienceTerms = EXPERIENCE_TERMS.some((term) => lower.includes(term));
+  const concreteSignals =
+    args.mentionedFacets.length > 0 ||
+    /\b\d{1,3}\b/.test(lower) ||
+    /\$\s?\d/.test(lower) ||
+    /\b\d{1,2}(?::\d{2})?\s?(?:am|pm)\b/i.test(lower) ||
+    /\b(because|when|after|before|during|until|but|and)\b/.test(lower);
+
+  if (hasGreetingOnly) {
+    return { reviewReady: false, readinessReason: "greeting_or_small_talk" };
+  }
+  if (wordCount < 4) {
+    return { reviewReady: false, readinessReason: "too_short" };
+  }
+  if (!hasExperienceTerms && args.mentionedFacets.length === 0) {
+    return { reviewReady: false, readinessReason: "lacks_stay_details" };
+  }
+  if (wordCount < 7 || !concreteSignals) {
+    return { reviewReady: false, readinessReason: "needs_specifics" };
+  }
+  return { reviewReady: true, readinessReason: null };
+}
+
+export function generateClarifierFallback(args: {
+  draftReview: string;
+  property: PropertyRecord;
+  readinessReason: ReviewReadinessReason;
+}): string {
+  const draft = args.draftReview.trim().toLowerCase();
+  switch (args.readinessReason) {
+    case "greeting_or_small_talk":
+      return "Tell me a bit about your stay in your own words, and include one or two things that stood out.";
+    case "too_short":
+      return "Give me one or two specific details from the stay so I can turn this into a real review.";
+    case "lacks_stay_details":
+      return "What actually stood out during the stay, like the room, service, or anything that shaped your impression?";
+    case "needs_specifics":
+      if (draft.includes("service")) {
+        return "What specifically about the service stood out to you?";
+      }
+      if (draft.includes("amenities")) {
+        return "Which amenity did you actually use, and how was it in practice?";
+      }
+      return "That helps. Can you add one or two specifics about what happened?";
+    default:
+      return "Tell me a bit more about what happened during the stay.";
+  }
+}
+
+export function fixedClarifierPrompt(): string {
+  return "Give me 1 or 2 specific details from the stay, like the room, staff, food, check-in, or parking.";
+}
+
 export function analyzeReviewFallback(args: {
   draftReview: string;
   eligibleFacets: RuntimeFacet[];
@@ -49,11 +152,25 @@ export function analyzeReviewFallback(args: {
     /\b(i|we|my|our)\b/i.test(text) ||
     /\bwas\b|\bwere\b|\bhad\b|\bgot\b|\bused\b/i.test(text),
   );
+  const readiness = analyzeReviewReadiness({
+    draftReview: args.draftReview,
+    eligibleFacets: args.eligibleFacets,
+    mentionedFacets,
+  });
 
   return {
     mentionedFacets,
     likelyKnownFacets,
     sentiment: detectSentiment(text),
+    reviewReady: readiness.reviewReady,
+    readinessReason: readiness.readinessReason,
+    suggestedClarifierPrompt: readiness.readinessReason
+      ? generateClarifierFallback({
+          draftReview: args.draftReview,
+          property: { propertyId: "unknown", propertySummary: "", facetListingTexts: {}, demoFlags: [] },
+          readinessReason: readiness.readinessReason,
+        })
+      : null,
     mlMentionProbByFacet: {},
     mlLikelyKnownByFacet: {},
     usedML: false,
@@ -67,9 +184,8 @@ export function generateQuestionFallback(args: {
   property: PropertyRecord;
 }): { questionText: string; voiceText: string } {
   const policy = FACET_POLICIES[args.facet];
-  const city = args.property.city ? ` in ${args.property.city}` : "";
   return {
-    questionText: `${policy.questionTemplate}${city ? ` This helps clarify the listing${city}.` : ""}`,
+    questionText: policy.questionTemplate,
     voiceText: policy.voiceTemplate,
   };
 }
@@ -80,6 +196,12 @@ export function extractAnswerFactsFallback(args: {
 }): { structuredFacts: StructuredFact[]; confidence: number } {
   const text = args.answerText.trim();
   const lower = text.toLowerCase();
+  if (isUnknownAnswer(lower)) {
+    return {
+      structuredFacts: [],
+      confidence: 0.2,
+    };
+  }
   const facts: StructuredFact[] = [];
 
   switch (args.facet) {
@@ -216,6 +338,46 @@ export function propertyCardDeltaSummary(
   return `Captured ${facts.length} ${facetLabel(facet)} fact${
     facts.length === 1 ? "" : "s"
   } for append-only evidence updates.`;
+}
+
+export function generateEnhancedReviewFallback(args: {
+  draftReview: string;
+  answers: Array<{ facet: RuntimeFacet; answerText: string }>;
+  structuredFacts: StructuredFact[];
+  overallRating?: number;
+  aspectRatings?: AspectRatings;
+  revisionNotes?: string[];
+}): string {
+  const parts = [
+    args.draftReview.trim(),
+    ...args.answers.map((answer) => answer.answerText.trim()),
+    ...(args.revisionNotes ?? []).map((note) => note.trim()),
+  ].filter(Boolean);
+
+  if (parts.length === 0) {
+    return "I wanted to share a quick review of my stay.";
+  }
+
+  const normalized = parts
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const ratingLead =
+    typeof args.overallRating === "number"
+      ? `Overall, I’d rate this stay ${args.overallRating} out of 10. `
+      : "";
+
+  if (normalized.endsWith(".") || normalized.endsWith("!") || normalized.endsWith("?")) {
+    return `${ratingLead}${normalized}`.trim();
+  }
+
+  return `${ratingLead}${normalized}.`.trim();
+}
+
+function isUnknownAnswer(text: string): boolean {
+  return /^(i do not know|i don't know|dont know|don't know|not sure|unsure|no idea|unknown|n\/a)$/i.test(
+    text.trim(),
+  );
 }
 
 function detectSentiment(text: string): SessionSentiment {

@@ -2,13 +2,20 @@ import OpenAI from "openai";
 
 import type { RuntimeFacet } from "./facets.js";
 import {
+  analyzeReviewReadiness,
   analyzeReviewFallback,
   extractAnswerFactsFallback,
+  fixedClarifierPrompt,
+  generateClarifierFallback,
+  generateEnhancedReviewFallback,
   generateQuestionFallback,
 } from "./fallbacks.js";
 import type {
+  AspectRatings,
+  FinalizeReviewPreviewResult,
   PropertyFacetEvidence,
   PropertyRecord,
+  ReviewReadinessReason,
   ReviewAnalysisResult,
   SourceDiagnostics,
   StructuredFact,
@@ -28,11 +35,24 @@ export interface ReviewGapAIClient {
     supportingEvidence: PropertyFacetEvidence[];
     draftReview: string;
   }): Promise<{ questionText: string; voiceText: string }>;
+  generateClarifier(input: {
+    draftReview: string;
+    property: PropertyRecord;
+    readinessReason: ReviewReadinessReason;
+  }): Promise<{ assistantText: string }>;
   extractAnswerFacts(input: {
     facet: RuntimeFacet;
     property: PropertyRecord;
     answerText: string;
   }): Promise<{ structuredFacts: StructuredFact[]; confidence: number }>;
+  generateEnhancedReview(input: {
+    draftReview: string;
+    answers: Array<{ facet: RuntimeFacet; answerText: string }>;
+    structuredFacts: StructuredFact[];
+    overallRating?: number;
+    aspectRatings?: AspectRatings;
+    revisionNotes?: string[];
+  }): Promise<{ reviewText: string }>;
 }
 
 export async function analyzeReviewWithFallback(
@@ -65,11 +85,25 @@ export async function analyzeReviewWithFallback(
   const mlLikelyKnown = mlPrediction
     ? mlPrediction.likelyKnownFacets.filter((facet) => input.eligibleFacets.includes(facet))
     : [];
+  const readiness = analyzeReviewReadiness({
+    draftReview: input.draftReview,
+    eligibleFacets: input.eligibleFacets,
+    mentionedFacets: mlMentioned.length > 0 ? mlMentioned : fallback.mentionedFacets,
+  });
   if (!client) {
     return {
       ...fallback,
       mentionedFacets: mlMentioned.length > 0 ? mlMentioned : fallback.mentionedFacets,
       likelyKnownFacets: mlLikelyKnown.length > 0 ? mlLikelyKnown : fallback.likelyKnownFacets,
+      reviewReady: readiness.reviewReady,
+      readinessReason: readiness.readinessReason,
+      suggestedClarifierPrompt: readiness.readinessReason
+        ? generateClarifierFallback({
+            draftReview: input.draftReview,
+            property: input.property,
+            readinessReason: readiness.readinessReason,
+          })
+        : null,
       mlMentionProbByFacet,
       mlLikelyKnownByFacet,
       usedML: Boolean(mlPrediction),
@@ -94,6 +128,15 @@ export async function analyzeReviewWithFallback(
           ? dedupeFacetList(mlLikelyKnown)
           : result.likelyKnownFacets,
       sentiment: result.sentiment,
+      reviewReady: readiness.reviewReady,
+      readinessReason: readiness.readinessReason,
+      suggestedClarifierPrompt: readiness.readinessReason
+        ? generateClarifierFallback({
+            draftReview: input.draftReview,
+            property: input.property,
+            readinessReason: readiness.readinessReason,
+          })
+        : null,
       mlMentionProbByFacet,
       mlLikelyKnownByFacet,
       usedML: Boolean(mlPrediction),
@@ -105,6 +148,15 @@ export async function analyzeReviewWithFallback(
       ...fallback,
       mentionedFacets: mlMentioned.length > 0 ? mlMentioned : fallback.mentionedFacets,
       likelyKnownFacets: mlLikelyKnown.length > 0 ? mlLikelyKnown : fallback.likelyKnownFacets,
+      reviewReady: readiness.reviewReady,
+      readinessReason: readiness.readinessReason,
+      suggestedClarifierPrompt: readiness.readinessReason
+        ? generateClarifierFallback({
+            draftReview: input.draftReview,
+            property: input.property,
+            readinessReason: readiness.readinessReason,
+          })
+        : null,
       mlMentionProbByFacet,
       mlLikelyKnownByFacet,
       usedML: Boolean(mlPrediction),
@@ -134,6 +186,41 @@ export async function generateQuestionWithFallback(
   }
 }
 
+export async function generateClarifierWithFallback(
+  client: ReviewGapAIClient | undefined,
+  input: {
+    draftReview: string;
+    property: PropertyRecord;
+    readinessReason: ReviewReadinessReason;
+    useFixedPrompt?: boolean;
+  },
+): Promise<{ assistantText: string; usedFallback: boolean }> {
+  if (input.useFixedPrompt) {
+    return { assistantText: fixedClarifierPrompt(), usedFallback: true };
+  }
+  if (!client) {
+    return {
+      assistantText: generateClarifierFallback(input),
+      usedFallback: true,
+    };
+  }
+  try {
+    const result = await client.generateClarifier(input);
+    return {
+      assistantText:
+        typeof result.assistantText === "string" && result.assistantText.trim().length > 0
+          ? result.assistantText.trim()
+          : generateClarifierFallback(input),
+      usedFallback: false,
+    };
+  } catch {
+    return {
+      assistantText: generateClarifierFallback(input),
+      usedFallback: true,
+    };
+  }
+}
+
 export async function extractAnswerFactsWithFallback(
   client: ReviewGapAIClient | undefined,
   input: {
@@ -156,6 +243,43 @@ export async function extractAnswerFactsWithFallback(
   } catch {
     const fallback = extractAnswerFactsFallback(input);
     return { ...fallback, usedFallback: true };
+  }
+}
+
+export async function generateEnhancedReviewWithFallback(
+  client: ReviewGapAIClient | undefined,
+  input: {
+    draftReview: string;
+    answers: Array<{ facet: RuntimeFacet; answerText: string }>;
+    structuredFacts: StructuredFact[];
+    overallRating?: number;
+    aspectRatings?: AspectRatings;
+    revisionNotes?: string[];
+  },
+): Promise<Pick<FinalizeReviewPreviewResult, "reviewText" | "usedOpenAI" | "usedFallback">> {
+  if (!client) {
+    return {
+      reviewText: generateEnhancedReviewFallback(input),
+      usedOpenAI: false,
+      usedFallback: true,
+    };
+  }
+  try {
+    const result = await client.generateEnhancedReview(input);
+    return {
+      reviewText:
+        typeof result.reviewText === "string" && result.reviewText.trim().length > 0
+          ? result.reviewText.trim()
+          : generateEnhancedReviewFallback(input),
+      usedOpenAI: true,
+      usedFallback: false,
+    };
+  } catch {
+    return {
+      reviewText: generateEnhancedReviewFallback(input),
+      usedOpenAI: false,
+      usedFallback: true,
+    };
   }
 }
 
@@ -202,7 +326,26 @@ export class OpenAIReviewGapClient implements ReviewGapAIClient {
         "You are phrasing a single follow-up question.",
         "Return JSON with questionText and voiceText.",
         "Do not change the chosen facet.",
-        "Keep it short, natural, and specific.",
+        "Keep it short, natural, specific, and retrospective.",
+        "Ask only about what the traveler personally experienced.",
+        "Do not ask hypothetical or policy lookup questions.",
+      ].join(" "),
+      JSON.stringify(input),
+    );
+  }
+
+  async generateClarifier(input: {
+    draftReview: string;
+    property: PropertyRecord;
+    readinessReason: ReviewReadinessReason;
+  }): Promise<{ assistantText: string }> {
+    return this.jsonCompletion(
+      [
+        "You are helping a traveler turn a vague hotel review into a more substantive one.",
+        "Return JSON with assistantText only.",
+        "Ask for one or two specific details from the stay.",
+        "Do not ask a property rules-engine question yet.",
+        "Keep it conversational, short, and natural.",
       ].join(" "),
       JSON.stringify(input),
     );
@@ -219,6 +362,30 @@ export class OpenAIReviewGapClient implements ReviewGapAIClient {
         "Return JSON with structuredFacts and confidence.",
         "Each fact must include facet, factType, value, confidence.",
         "Be conservative and only emit facts supported by the answer text.",
+      ].join(" "),
+      JSON.stringify(input),
+    );
+  }
+
+  async generateEnhancedReview(input: {
+    draftReview: string;
+    answers: Array<{ facet: RuntimeFacet; answerText: string }>;
+    structuredFacts: StructuredFact[];
+    overallRating?: number;
+    aspectRatings?: AspectRatings;
+    revisionNotes?: string[];
+  }): Promise<{ reviewText: string }> {
+    return this.jsonCompletion(
+      [
+        "You rewrite a hotel review into a concise, natural first-person traveler review.",
+        "Return JSON with reviewText only.",
+        "Preserve the user's meaning, tone, and concrete facts.",
+        "Do not invent details or scores.",
+        "Use only information explicitly provided in the user's draft, structured ratings, revision notes, and accepted follow-up answers.",
+        "Do not pull details from the property listing, property card, or supporting evidence into the review body.",
+        "Do not broaden specific details into vague summaries like 'good amenities' unless the user explicitly used that phrase.",
+        "Keep it readable and publication-ready in 3 to 6 sentences.",
+        "Blend positives and negatives naturally when both appear.",
       ].join(" "),
       JSON.stringify(input),
     );
