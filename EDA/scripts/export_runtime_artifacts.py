@@ -2,6 +2,9 @@
 
 This is an offline-only step. It consumes validated EDA outputs and emits a
 compact runtime bundle for Convex import.
+
+Importance values and reliability thresholds are loaded from experiment_config.py.
+See program.md for the autoresearch ratchet loop instructions.
 """
 from __future__ import annotations
 
@@ -10,6 +13,8 @@ import json
 import re
 from collections import defaultdict
 from pathlib import Path
+
+import experiment_config as cfg  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "data"
@@ -31,18 +36,7 @@ FACETS = [
 ]
 
 BLOCKED = {"pet", "children_extra_bed", "amenities_wifi", "amenities_gym"}
-IMPORTANCE = {
-    "check_in": 0.95,
-    "check_out": 0.84,
-    "amenities_breakfast": 0.90,
-    "amenities_parking": 0.92,
-    "know_before_you_go": 0.70,
-    "amenities_pool": 0.68,
-    "pet": 0.30,
-    "children_extra_bed": 0.28,
-    "amenities_wifi": 0.26,
-    "amenities_gym": 0.24,
-}
+IMPORTANCE = cfg.IMPORTANCE
 
 FACET_LISTING_FIELDS = {
     "check_in": ["check_in_start_time", "check_in_end_time", "check_in_instructions"],
@@ -129,7 +123,7 @@ def int_value(row: dict[str, str], key: str, default: int = 0) -> int:
 def staleness_score(days_since: int) -> float:
     if days_since >= 9999:
         return 1.0
-    return round(min(days_since / 365.0, 1.0), 4)
+    return round(min(days_since / cfg.STALENESS_NORM_DAYS, 1.0), 4)
 
 
 def compute_reliability(
@@ -141,14 +135,15 @@ def compute_reliability(
     has_listing_text: bool,
 ) -> str:
     if facet in BLOCKED:
-      return "blocked"
+        return "blocked"
     if not has_listing_text:
-      return "low"
-    if validated_conflict_count > 0 or matched_review_rate >= 0.03:
+        return "low"
+    if validated_conflict_count > 0 or matched_review_rate >= cfg.RELIABILITY_HIGH_MATCHED_RATE:
         return "high"
     if (
-        mean_cos_matched_reviews >= 0.32 and matched_review_rate >= 0.01
-    ) or mention_rate >= 0.02:
+        mean_cos_matched_reviews >= cfg.RELIABILITY_MEDIUM_COS
+        and matched_review_rate >= cfg.RELIABILITY_MEDIUM_MATCHED_RATE
+    ) or mention_rate >= cfg.RELIABILITY_MEDIUM_MENTION_RATE:
         return "medium"
     return "low"
 

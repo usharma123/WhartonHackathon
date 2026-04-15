@@ -3,6 +3,9 @@
 This script keeps ML offline-only. It derives high-confidence labels from the
 semantic facet score artifact, trains one logistic regression model per runtime
 facet, and exports a TypeScript-runnable TF-IDF + linear classifier bundle.
+
+Hyperparameters are loaded from experiment_config.py — edit that file, not this one.
+See program.md for the full autoresearch ratchet loop instructions.
 """
 from __future__ import annotations
 
@@ -15,6 +18,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score, precision_score, recall_score, roc_auc_score
 from sklearn.model_selection import GroupShuffleSplit
+
+import experiment_config as cfg  # noqa: E402 — loaded from same directory
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "data"
@@ -31,10 +36,10 @@ FACETS = [
     "amenities_pool",
 ]
 PRIMARY = {"check_in", "check_out", "amenities_breakfast", "amenities_parking"}
-POSITIVE_MARGIN = 0.05
-NEGATIVE_MARGIN = 0.05
-MIN_TEXT_LEN = 20
-RANDOM_STATE = 42
+POSITIVE_MARGIN = cfg.POSITIVE_MARGIN
+NEGATIVE_MARGIN = cfg.NEGATIVE_MARGIN
+MIN_TEXT_LEN = cfg.MIN_TEXT_LEN
+RANDOM_STATE = cfg.RANDOM_STATE
 
 FIXTURE_TEXTS = [
     "Check-in took forty minutes, the front desk was overwhelmed, and our room was not ready.",
@@ -86,8 +91,8 @@ def select_threshold(y_true: np.ndarray, probabilities: np.ndarray) -> tuple[flo
 
 def shipping_gate(facet: str, roc_auc: float, f1: float) -> bool:
     if facet in PRIMARY:
-        return roc_auc >= 0.78 and f1 >= 0.52
-    return roc_auc >= 0.72 and f1 >= 0.42
+        return roc_auc >= cfg.PRIMARY_MIN_ROC_AUC and f1 >= cfg.PRIMARY_MIN_F1
+    return roc_auc >= cfg.SECONDARY_MIN_ROC_AUC and f1 >= cfg.SECONDARY_MIN_F1
 
 
 def top_terms(feature_names: list[str], coefficients: np.ndarray, take: int = 12) -> tuple[list[str], list[str]]:
@@ -108,9 +113,9 @@ def train_models():
         lowercase=True,
         strip_accents="unicode",
         token_pattern=r"(?u)\b\w\w+\b",
-        ngram_range=(1, 2),
-        min_df=2,
-        max_features=2500,
+        ngram_range=cfg.NGRAM_RANGE,
+        min_df=cfg.MIN_DF,
+        max_features=cfg.MAX_FEATURES,
         norm="l2",
         use_idf=True,
         smooth_idf=True,
@@ -136,10 +141,10 @@ def train_models():
         train = frame.iloc[train_idx]
         test = frame.iloc[test_idx]
         model = LogisticRegression(
-            random_state=RANDOM_STATE,
-            max_iter=1500,
-            class_weight="balanced",
-            C=2.0,
+            random_state=cfg.RANDOM_STATE,
+            max_iter=cfg.MAX_ITER,
+            class_weight=cfg.CLASS_WEIGHT,
+            C=cfg.C,
         )
         x_train = shared_vectorizer.transform(train["full_text"])
         x_test = shared_vectorizer.transform(test["full_text"])
@@ -154,10 +159,10 @@ def train_models():
 
         x_all = shared_vectorizer.transform(frame["full_text"])
         model_final = LogisticRegression(
-            random_state=RANDOM_STATE,
-            max_iter=1500,
-            class_weight="balanced",
-            C=2.0,
+            random_state=cfg.RANDOM_STATE,
+            max_iter=cfg.MAX_ITER,
+            class_weight=cfg.CLASS_WEIGHT,
+            C=cfg.C,
         )
         model_final.fit(x_all, frame["label"].to_numpy())
 

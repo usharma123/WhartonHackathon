@@ -1,0 +1,6 @@
+timestamp	hypothesis	weighted_f1	mean_roc_auc	gate_rate	combined_score	kept	C	max_features	positive_margin	negative_margin	min_text_len	staleness_norm_days
+2026-04-15T19:58:59Z	baseline	0.8433	0.9842	1.0	0.9161	?	2.0	2500	0.05	0.05	20	365
+2026-04-15T19:59:21Z	POSITIVE_MARGIN 0.05→0.10: tighter positive labels to cut label noise on parking+kbyg	0.8386	nan	0.8333	nan	?	2.0	2500	0.1	0.05	20	365
+2026-04-15T20:00:00Z	C 2.0→1.0: more regularization to improve generalization on sparse facets	0.8444	0.9821	1.0	0.916	?	1.0	2500	0.05	0.05	20	365
+2026-04-15T20:00:22Z	MAX_FEATURES 2500→4000: larger vocab captures more hotel-specific bigrams	0.8431	0.9831	1.0	0.9156	?	2.0	4000	0.05	0.05	20	365
+2026-04-15T20:00:49Z	MIN_TEXT_LEN 20→40: filter one-liners, train only on substantive reviews	0.8692	0.9849	1.0	0.9293	?	2.0	2500	0.05	0.05	40	365
