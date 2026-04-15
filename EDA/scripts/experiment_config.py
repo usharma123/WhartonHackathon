@@ -28,7 +28,7 @@ MIN_TEXT_LEN: int = 40
 # Logistic regression regularization.
 # Higher C = less regularization (more capacity, more risk of overfitting).
 # Try: 0.5, 1.0, 2.0 (default), 5.0
-C: float = 2.0
+C: float = 5.0
 
 # Maximum number of TF-IDF features (vocabulary size).
 # Higher values capture more hotel-specific bigrams but slow inference.

@@ -4,3 +4,5 @@ timestamp	hypothesis	weighted_f1	mean_roc_auc	gate_rate	combined_score	kept	C	ma
 2026-04-15T20:00:00Z	C 2.0→1.0: more regularization to improve generalization on sparse facets	0.8444	0.9821	1.0	0.916	?	1.0	2500	0.05	0.05	20	365
 2026-04-15T20:00:22Z	MAX_FEATURES 2500→4000: larger vocab captures more hotel-specific bigrams	0.8431	0.9831	1.0	0.9156	?	2.0	4000	0.05	0.05	20	365
 2026-04-15T20:00:49Z	MIN_TEXT_LEN 20→40: filter one-liners, train only on substantive reviews	0.8692	0.9849	1.0	0.9293	?	2.0	2500	0.05	0.05	40	365
+2026-04-15T20:01:12Z	MIN_TEXT_LEN 40→60: push text filter further	0.7566	nan	0.8333	nan	?	2.0	2500	0.05	0.05	60	365
+2026-04-15T20:01:26Z	C 2.0→5.0: more capacity on cleaner min_text_len=40 data	0.8721	0.985	1.0	0.9308	?	5.0	2500	0.05	0.05	40	365
