@@ -1,6 +1,6 @@
 # ReviewGap Demo Engine
 
-Next.js + Convex demo for live review-aware follow-up questions, with deterministic ranking, persisted session state, and optional OpenAI-assisted phrasing/extraction.
+Next.js + Convex demo for authenticated, live review-aware follow-up questions, with deterministic ranking, persisted session state, and optional OpenAI-assisted phrasing/extraction.
 
 ## Stack
 
@@ -8,6 +8,7 @@ Next.js + Convex demo for live review-aware follow-up questions, with determinis
 - `Next.js 15`
 - `React 19`
 - `Convex`
+- `Clerk`
 - `OpenAI`
 - Python artifact export for offline ML/runtime bundle generation
 
@@ -42,8 +43,13 @@ This imports:
 Copy `.env.local.example` to `.env.local` only if you need to wire values manually, then set:
 
 ```bash
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=...
+CLERK_SECRET_KEY=...
+CLERK_JWT_ISSUER_DOMAIN=https://your-instance.clerk.accounts.dev
 OPENAI_API_KEY=...
 ```
+
+Then activate the Convex integration in Clerk and run `pnpm dev` again so Convex picks up [convex/auth.config.ts](/Users/utsavsharma/Documents/GitHub/WhartonHackathon/convex/auth.config.ts).
 
 Without `OPENAI_API_KEY`, the app still runs using the deterministic fallback path where supported.
 
@@ -72,8 +78,9 @@ pnpm run check
 ## What’s Implemented
 
 - Convex tables for `properties`, `propertyFacetMetrics`, `propertyFacetEvidence`, `reviewSessions`, `followUpQuestions`, `followUpAnswers`, and append-only `propertyEvidenceUpdates`
-- React client integration via `ConvexProvider` and generated `api` bindings
+- React client integration via Clerk, `ConvexProviderWithClerk`, and generated `api` bindings
 - deterministic ranking policy with the MVP allow-list and hard-blocked facets
+- authenticated first-party review ingestion that updates `propertyLiveReviews`, `userPropertyReviews`, `propertyFacetLiveSignals`, and first-party evidence in real time
 - OpenAI-backed review analysis, question phrasing, and answer fact extraction when `OPENAI_API_KEY` is configured
 - fallback review analysis, question phrasing, and answer fact extraction when AI is unavailable
 - curated demo scenarios for check-in friction, breakfast mismatch, and parking shortage/conflict

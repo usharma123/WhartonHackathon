@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "export:runtime": "python3 EDA/scripts/export_runtime_artifacts.py",
     "train:ml": "python3 EDA/scripts/train_review_classifier.py",
+    "evaluate:ml": "python3 EDA/scripts/evaluate.py",
     "build:artifacts": "python3 EDA/scripts/build_demo_artifacts.py",
     "codegen": "convex codegen --typecheck disable",
     "seed:demo": "node scripts/seed-demo.mjs",
@@ -22,8 +23,9 @@
     "check": "pnpm run typecheck && pnpm run test"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.2.0",
     "convex": "^1.35.1",
-    "next": "^15.3.1",
+    "next": "^16.2.3",
     "openai": "^6.34.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
