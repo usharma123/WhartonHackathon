@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "../convex/_generated/api";
 import { appendTranscriptToDraft } from "../src/lib/audio";
+import { normalizeReviewPreviewPayload } from "../src/lib/reviewPreview";
 import {
   REALTIME_AUDIO_SAMPLE_RATE,
   float32ToPCM16,
@@ -171,37 +172,6 @@ function isValidNextTurn(value: unknown): value is NextTurn {
     );
   }
   return false;
-}
-
-function hasValidPreviewPayload(
-  value: unknown,
-): value is {
-  reviewText: string;
-  factCandidates: Array<{
-    id: string;
-    facet: string;
-    factType: string;
-    value: unknown;
-    confidence: number;
-    source: "draft_review" | "follow_up_answer";
-    sourceText: string;
-    editable: boolean;
-    selectedByDefault: boolean;
-  }>;
-  tripContext?: TripContext | null;
-  confirmationPrompt: string;
-} {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as {
-    reviewText?: unknown;
-    factCandidates?: unknown;
-    confirmationPrompt?: unknown;
-  };
-  return (
-    typeof candidate.reviewText === "string" &&
-    Array.isArray(candidate.factCandidates) &&
-    typeof candidate.confirmationPrompt === "string"
-  );
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -701,12 +671,17 @@ function AuthenticatedApp() {
     draftReview: string,
     notes: string[],
   ) {
-    const preview = await finalizeReviewPreview({
+    const rawPreview = await finalizeReviewPreview({
       sessionId: activeSessionId,
       draftReview,
       revisionNotes: notes.length > 0 ? notes : undefined,
     });
-    if (!hasValidPreviewPayload(preview)) {
+    const preview = normalizeReviewPreviewPayload(rawPreview, {
+      draftReview,
+      answers: answerHistory,
+      overallRating,
+    });
+    if (!preview) {
       throw new Error("Received an invalid review preview.");
     }
 

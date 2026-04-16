@@ -20,6 +20,7 @@ import {
   updateStructuredReview as updateStructuredReviewService,
 } from "../src/backend/service.js";
 import type { RuntimeFacet } from "../src/backend/facets.js";
+import { normalizeReviewPreviewPayload } from "../src/lib/reviewPreview.js";
 
 export const analyzeDraftReview = actionGeneric({
   args: {
@@ -85,11 +86,16 @@ export const finalizeReviewPreview = actionGeneric({
     const tokenIdentifier = await requireTokenIdentifier(ctx);
     const store = createConvexActionStore(ctx);
     await requireSessionOwnership(store, args.sessionId, tokenIdentifier);
-    return finalizeReviewPreviewService(store, makeAIClient(), {
+    const preview = await finalizeReviewPreviewService(store, makeAIClient(), {
       sessionId: args.sessionId,
       draftReview: args.draftReview,
       revisionNotes: args.revisionNotes,
     });
+    return (
+      normalizeReviewPreviewPayload(preview, {
+        draftReview: args.draftReview,
+      }) ?? preview
+    );
   },
 });
 
