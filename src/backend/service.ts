@@ -25,8 +25,10 @@ import type {
   FactCandidate,
   FinalizeReviewPreviewInput,
   FinalizeReviewPreviewResult,
+  LearnedRankerArtifact,
   PropertyEvidenceUpdate,
   PropertyFacetMetric,
+  RankerSource,
   ScoreBreakdown,
   SelectNextQuestionInput,
   SelectNextQuestionResult,
@@ -42,6 +44,8 @@ import type {
 import { summarizeEligibleFacet } from "./runtimeBundle.js";
 import type { ReviewGapStore } from "./store.js";
 import { buildWhyThisQuestion } from "./whyThisQuestion.js";
+
+const MAX_TOTAL_FOLLOW_UP_TURNS = 2;
 
 export async function createReviewSession(
   store: ReviewGapStore,
@@ -125,6 +129,7 @@ export async function selectNextQuestion(
   aiClient: ReviewGapAIClient | undefined,
   input: SelectNextQuestionInput,
   classifierArtifact?: FacetClassifierArtifact,
+  learnedRankerArtifact?: LearnedRankerArtifact,
 ): Promise<SelectNextQuestionResult> {
   const session = await requireSession(store, input.sessionId);
   const property = await requireProperty(store, session.propertyId);
@@ -138,9 +143,19 @@ export async function selectNextQuestion(
     },
     classifierArtifact,
   );
+  const totalFollowUpTurns = session.clarifierCount + priorAnswers.length;
+
+  if (totalFollowUpTurns >= MAX_TOTAL_FOLLOW_UP_TURNS) {
+    return buildNoFollowUpResult(analysis, {
+      assistantText:
+        "I have enough to draft the review from what you've already shared.",
+      whyThisQuestion:
+        "The session already used the maximum of two follow-up turns, so the flow is moving to drafting.",
+    });
+  }
 
   if (!analysis.reviewReady && analysis.readinessReason) {
-    const useFixedPrompt = session.clarifierCount >= 2;
+    const useFixedPrompt = session.clarifierCount >= MAX_TOTAL_FOLLOW_UP_TURNS - 1;
     const clarifier = await generateClarifierWithFallback(aiClient, {
       draftReview: input.draftReview,
       property,
@@ -151,7 +166,10 @@ export async function selectNextQuestion(
     await store.updateReviewSession(session.id, {
       draftReview: input.draftReview,
       conversationStage: "collecting_review",
-      clarifierCount: Math.min(session.clarifierCount + 1, 2),
+      clarifierCount: Math.min(
+        session.clarifierCount + 1,
+        MAX_TOTAL_FOLLOW_UP_TURNS,
+      ),
       selectedFacet: null,
       updatedAt,
     });
@@ -176,10 +194,33 @@ export async function selectNextQuestion(
   }
 
   const metrics = await store.listPropertyFacetMetrics(session.propertyId);
-  const ranked = rankFacetMetrics(metrics, analysis, {
+  const heuristicRanked = rankFacetMetrics(metrics, analysis, {
     includeSecondaryFacets: input.includeSecondaryFacets ?? false,
+    rankerSource: "heuristic",
   });
-  const top = chooseNextFacetCandidate(ranked, priorAnswers, analysis.sentiment);
+  const learnedRanked = learnedRankerArtifact
+    ? rankFacetMetrics(metrics, analysis, {
+        includeSecondaryFacets: input.includeSecondaryFacets ?? false,
+        learnedArtifact: learnedRankerArtifact,
+        rankerSource:
+          learnedRankerArtifact.modelKind === "tree" ? "learned_tree" : "learned_linear",
+      })
+    : [];
+  const servedRanked = learnedRanked.length > 0 ? learnedRanked : heuristicRanked;
+  const top = chooseNextFacetCandidate(servedRanked, priorAnswers, analysis.sentiment);
+  await store.createRankerShadowEvent({
+    sessionId: session.id,
+    propertyId: property.propertyId,
+    draftReviewHash: stableDraftHash(input.draftReview),
+    heuristicTop3: heuristicRanked.slice(0, 3).map((candidate) => candidate.facet),
+    learnedTop3: learnedRanked.slice(0, 3).map((candidate) => candidate.facet),
+    servedTop3: servedRanked.slice(0, 3).map((candidate) => candidate.facet),
+    finalServedFacet: top?.facet ?? null,
+    rankerSource: inferServedRankerSource(top?.scoreBreakdown),
+    baseModelVersion: top?.scoreBreakdown.baseModelVersion,
+    disagreed: compareFacetOrders(heuristicRanked, learnedRanked),
+    createdAt: store.now(),
+  });
 
   if (!top) {
     await store.updateReviewSession(session.id, {
@@ -187,22 +228,12 @@ export async function selectNextQuestion(
       conversationStage: "collecting_review",
       updatedAt: store.now(),
     });
-    return {
-      turnType: "no_follow_up",
+    return buildNoFollowUpResult(analysis, {
       assistantText:
         "I have enough to draft the review without another follow-up question.",
-      readinessReason: null,
-      facet: null,
-      questionText: null,
-      voiceText: null,
       whyThisQuestion:
         "No eligible follow-up remained after the MVP allow-list, reliability, and coverage checks.",
-      scoreBreakdown: null,
-      supportingEvidence: [],
-      analysis,
-      questionSource: null,
-      noFollowUp: true,
-    };
+    });
   }
 
   const supportingEvidence = (
@@ -769,7 +800,7 @@ function chooseNextFacetCandidate(
   answers: Array<{ facet: RuntimeFacet; answerText: string }>,
   sentiment: SessionSentiment,
 ) {
-  if (ranked.length === 0 || answers.length >= 2) {
+  if (ranked.length === 0 || answers.length >= MAX_TOTAL_FOLLOW_UP_TURNS) {
     return null;
   }
   const answeredFacets = new Set(answers.map((answer) => answer.facet));
@@ -789,6 +820,59 @@ function chooseNextFacetCandidate(
       : unresolvedNegativeScore(right) - unresolvedNegativeScore(left),
   );
   return sorted[0] ?? null;
+}
+
+function buildNoFollowUpResult(
+  analysis: SelectNextQuestionResult["analysis"],
+  details: {
+    assistantText: string;
+    whyThisQuestion: string;
+  },
+): SelectNextQuestionResult {
+  return {
+    turnType: "no_follow_up",
+    assistantText: details.assistantText,
+    readinessReason: null,
+    facet: null,
+    questionText: null,
+    voiceText: null,
+    whyThisQuestion: details.whyThisQuestion,
+    scoreBreakdown: null,
+    supportingEvidence: [],
+    analysis,
+    questionSource: null,
+    noFollowUp: true,
+  };
+}
+
+function compareFacetOrders(
+  heuristicRanked: Array<{ facet: RuntimeFacet }>,
+  learnedRanked: Array<{ facet: RuntimeFacet }>,
+): boolean {
+  if (learnedRanked.length === 0) {
+    return false;
+  }
+  const heuristicTop = heuristicRanked.slice(0, 3).map((candidate) => candidate.facet);
+  const learnedTop = learnedRanked.slice(0, 3).map((candidate) => candidate.facet);
+  if (heuristicTop.length !== learnedTop.length) {
+    return true;
+  }
+  return heuristicTop.some((facet, index) => learnedTop[index] !== facet);
+}
+
+function inferServedRankerSource(
+  breakdown: Pick<ScoreBreakdown, "rankerSource"> | null | undefined,
+): RankerSource {
+  return breakdown?.rankerSource ?? "heuristic";
+}
+
+function stableDraftHash(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  let hash = 0;
+  for (let pointer = 0; pointer < normalized.length; pointer += 1) {
+    hash = Math.imul(33, hash) ^ normalized.charCodeAt(pointer);
+  }
+  return `draft_${Math.abs(hash).toString(36)}`;
 }
 
 function positiveBalanceScore(candidate: {

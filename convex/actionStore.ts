@@ -1,6 +1,6 @@
 import type { ReviewGapStore } from "../src/backend/store.js";
 import type { FacetClassifierArtifact } from "../src/backend/ml.js";
-import type { PropertyRecord } from "../src/backend/types.js";
+import type { LearnedRankerArtifact, PropertyRecord } from "../src/backend/types.js";
 
 type ActionCtx = {
   runQuery: (ref: any, args: any) => Promise<any>;
@@ -33,6 +33,9 @@ const refs = {
   upsertUserPropertyReview: "reviewGapInternal:upsertUserPropertyReview",
   listUserPropertyReviews: "reviewGapInternal:listUserPropertyReviews",
   getFacetClassifierArtifact: "reviewGapInternal:getFacetClassifierArtifact",
+  getLearnedRankerArtifact: "reviewGapInternal:getLearnedRankerArtifact",
+  createRankerShadowEvent: "reviewGapInternal:createRankerShadowEvent",
+  listRankerShadowEvents: "reviewGapInternal:listRankerShadowEvents",
 } as const;
 
 export function createConvexActionStore(ctx: ActionCtx): ReviewGapStore {
@@ -136,6 +139,12 @@ export function createConvexActionStore(ctx: ActionCtx): ReviewGapStore {
     async listUserPropertyReviews(propertyId) {
       return ctx.runQuery(refs.listUserPropertyReviews as any, { propertyId });
     },
+    async createRankerShadowEvent(event) {
+      return ctx.runMutation(refs.createRankerShadowEvent as any, { event });
+    },
+    async listRankerShadowEvents(sessionId) {
+      return ctx.runQuery(refs.listRankerShadowEvents as any, { sessionId });
+    },
   };
 }
 
@@ -169,6 +178,57 @@ export async function loadFacetClassifierArtifactFromConvex(
     idf: doc.idf,
     models: doc.models,
   };
+}
+
+export async function loadLearnedRankerArtifactFromConvex(
+  ctx: ActionCtx,
+): Promise<LearnedRankerArtifact | undefined> {
+  const doc = await ctx.runQuery(refs.getLearnedRankerArtifact as any, {});
+  if (!doc) {
+    return undefined;
+  }
+
+  if (doc.modelKind === "tree") {
+    return {
+      artifactType: "learned_ranker",
+      version: doc.version,
+      generatedAt: doc.generatedAt,
+      modelKind: "tree",
+      featureKeys: doc.featureKeys ?? [],
+      temporalMetrics: parseJsonRecord(doc.temporalMetricsJson),
+      manualMetrics: parseJsonRecord(doc.manualMetricsJson),
+      treePayloadJson: doc.treePayloadJson,
+      notes: doc.notes ?? [],
+    };
+  }
+
+  return {
+    artifactType: "learned_ranker",
+    version: doc.version,
+    generatedAt: doc.generatedAt,
+    modelKind: "linear",
+    featureKeys: doc.featureKeys ?? [],
+    featureStats: doc.featureStats ?? [],
+    coefficients: doc.coefficients ?? [],
+    intercept: doc.intercept ?? 0,
+    temporalMetrics: parseJsonRecord(doc.temporalMetricsJson),
+    manualMetrics: parseJsonRecord(doc.manualMetricsJson),
+    notes: doc.notes ?? [],
+  };
+}
+
+function parseJsonRecord(
+  raw: string | undefined,
+): Record<string, number> | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(raw) as Record<string, number>;
+    return parsed && typeof parsed === "object" ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export type DemoPropertySummary = Pick<

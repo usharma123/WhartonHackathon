@@ -184,12 +184,35 @@ export const listUserPropertyReviews = internalQueryGeneric({
     createConvexStore(ctx.db).listUserPropertyReviews(args.propertyId),
 });
 
+export const createRankerShadowEvent = internalMutationGeneric({
+  args: { event: v.any() },
+  handler: async (ctx, args) =>
+    createConvexStore(ctx.db).createRankerShadowEvent(args.event),
+});
+
+export const listRankerShadowEvents = internalQueryGeneric({
+  args: { sessionId: v.string() },
+  handler: async (ctx, args) =>
+    createConvexStore(ctx.db).listRankerShadowEvents(args.sessionId),
+});
+
 export const getFacetClassifierArtifact = internalQueryGeneric({
   args: {},
   handler: async (ctx) => {
     const doc = await ctx.db
       .query("mlRuntimeArtifacts")
       .withIndex("by_artifact_type", (q) => q.eq("artifactType", "facet_classifier"))
+      .unique();
+    return doc ?? null;
+  },
+});
+
+export const getLearnedRankerArtifact = internalQueryGeneric({
+  args: {},
+  handler: async (ctx) => {
+    const doc = await ctx.db
+      .query("learnedRankerArtifacts")
+      .withIndex("by_artifact_type", (q) => q.eq("artifactType", "learned_ranker"))
       .unique();
     return doc ?? null;
   },

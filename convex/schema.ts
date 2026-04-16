@@ -52,6 +52,12 @@ const scoreBreakdownValidator = v.object({
   alreadyMentionedPenalty: v.number(),
   reviewerKnowsBoost: v.number(),
   total: v.number(),
+  rankerSource: v.optional(v.string()),
+  baseModelVersion: v.optional(v.string()),
+  baseScore: v.optional(v.number()),
+  sessionAdjustment: v.optional(v.number()),
+  finalScore: v.optional(v.number()),
+  heuristicScore: v.optional(v.number()),
   sampleSize: v.optional(v.number()),
   evidenceMix: v.optional(v.string()),
   topDriver: v.optional(v.string()),
@@ -160,6 +166,12 @@ export default defineSchema({
     validatedConflictCount: v.number(),
     validatedConflictScore: v.number(),
     listingTextPresent: v.boolean(),
+    sampleSize: v.optional(v.number()),
+    vendorSampleSize: v.optional(v.number()),
+    firstPartySampleSize: v.optional(v.number()),
+    sampleConfidence: v.optional(v.number()),
+    evidenceMix: v.optional(v.string()),
+    topDriver: v.optional(v.string()),
   })
     .index("by_property_id", ["propertyId"])
     .index("by_property_id_facet", ["propertyId", "facet"]),
@@ -328,4 +340,42 @@ export default defineSchema({
       }),
     ),
   }).index("by_artifact_type", ["artifactType"]),
+
+  learnedRankerArtifacts: defineTable({
+    artifactType: v.string(),
+    version: v.string(),
+    generatedAt: v.string(),
+    modelKind: v.union(v.literal("linear"), v.literal("tree")),
+    featureKeys: v.array(v.string()),
+    featureStats: v.optional(
+      v.array(
+        v.object({
+          mean: v.number(),
+          std: v.number(),
+        }),
+      ),
+    ),
+    coefficients: v.optional(v.array(v.number())),
+    intercept: v.optional(v.number()),
+    treePayloadJson: v.optional(v.string()),
+    temporalMetricsJson: v.optional(v.string()),
+    manualMetricsJson: v.optional(v.string()),
+    notes: v.optional(v.array(v.string())),
+  }).index("by_artifact_type", ["artifactType"]),
+
+  rankerShadowEvents: defineTable({
+    sessionId: v.string(),
+    propertyId: v.string(),
+    draftReviewHash: v.string(),
+    heuristicTop3: v.array(v.string()),
+    learnedTop3: v.array(v.string()),
+    servedTop3: v.array(v.string()),
+    finalServedFacet: v.optional(v.string()),
+    rankerSource: v.string(),
+    baseModelVersion: v.optional(v.string()),
+    disagreed: v.boolean(),
+    createdAt: v.string(),
+  })
+    .index("by_session_id", ["sessionId"])
+    .index("by_property_id", ["propertyId"]),
 });

@@ -17,7 +17,11 @@ import {
 import { loadRuntimeBundle } from "../src/backend/runtimeBundle.node.js";
 import { seedRuntimeBundle } from "../src/backend/runtimeBundle.js";
 import { InMemoryReviewGapStore } from "../src/backend/store.js";
-import type { FinalizeReviewPreviewResult, PropertyRecord } from "../src/backend/types.js";
+import type {
+  FinalizeReviewPreviewResult,
+  LearnedRankerArtifact,
+  PropertyRecord,
+} from "../src/backend/types.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const bundlePath = path.join(
@@ -82,6 +86,77 @@ const firstPersonOnlyAiClient: ReviewGapAIClient = {
   }),
 };
 
+const underDetectingAiClient: ReviewGapAIClient = {
+  analyzeReview: async () => ({
+    mentionedFacets: [],
+    likelyKnownFacets: [],
+    sentiment: "neutral",
+    reviewReady: true,
+    readinessReason: null,
+    suggestedClarifierPrompt: null,
+    mlMentionProbByFacet: {},
+    mlLikelyKnownByFacet: {},
+    usedML: false,
+    usedOpenAI: true,
+  }),
+  generateQuestion: async () => ({
+    questionText: "How was breakfast in practice?",
+    voiceText: "How was breakfast in practice?",
+  }),
+  generateClarifier: async () => ({
+    assistantText: "Tell me one specific detail from the stay.",
+  }),
+  extractAnswerFacts: async () => ({
+    structuredFacts: [],
+    confidence: 0.5,
+  }),
+  generateEnhancedReview: async () => ({
+    reviewText: "The stay was fine.",
+  }),
+};
+
+const malformedQuestionAiClient: ReviewGapAIClient = {
+  analyzeReview: async () => ({
+    mentionedFacets: [],
+    likelyKnownFacets: [],
+    sentiment: "neutral",
+    reviewReady: true,
+    readinessReason: null,
+    suggestedClarifierPrompt: null,
+    mlMentionProbByFacet: {},
+    mlLikelyKnownByFacet: {},
+    usedML: false,
+    usedOpenAI: true,
+  }),
+  generateQuestion: async () => ({ questionText: "" as string, voiceText: "" as string }),
+  generateClarifier: async () => ({
+    assistantText: "Tell me one specific detail from the stay.",
+  }),
+  extractAnswerFacts: async () => ({
+    structuredFacts: [],
+    confidence: 0.5,
+  }),
+  generateEnhancedReview: async () => ({
+    reviewText: "The stay was fine.",
+  }),
+};
+
+const learnedRankerArtifact: LearnedRankerArtifact = {
+  artifactType: "learned_ranker",
+  version: "test-linear",
+  generatedAt: "2026-04-15T00:00:00Z",
+  modelKind: "linear",
+  featureKeys: ["importance", "validatedConflictScore", "sampleSize", "reliability_high"],
+  featureStats: [
+    { mean: 0, std: 1 },
+    { mean: 0, std: 1 },
+    { mean: 0, std: 1 },
+    { mean: 0, std: 1 },
+  ],
+  coefficients: [0.5, 3.0, 0.01, 0.2],
+  intercept: 0.1,
+};
+
 describe("session flow", () => {
   it("creates a review session with eligible facets", async () => {
     const { store } = await createSeededStore();
@@ -137,6 +212,36 @@ describe("session flow", () => {
     );
     expect(summary.selectedFacet).toBeNull();
     expect(summary.accumulatedEvidenceUpdates.length).toBe(0);
+  });
+
+  it("logs heuristic vs learned shadow rankings with score provenance", async () => {
+    const { store } = await createSeededStore();
+    const session = await createReviewSession(store, { propertyId: PARKING_PROPERTY });
+    const result = await selectNextQuestion(
+      store,
+      undefined,
+      {
+        sessionId: session.sessionId,
+        draftReview: "The room was clean and the staff were nice.",
+      },
+      undefined,
+      learnedRankerArtifact,
+    );
+
+    const shadowEvents = await store.listRankerShadowEvents(session.sessionId);
+
+    expect(result.turnType).toBe("facet_followup");
+    expect(result.scoreBreakdown?.rankerSource).toBe("learned_linear");
+    expect(result.scoreBreakdown?.baseModelVersion).toBe("test-linear");
+    expect(shadowEvents).toHaveLength(1);
+    expect(shadowEvents[0]).toEqual(
+      expect.objectContaining({
+        sessionId: session.sessionId,
+        rankerSource: "learned_linear",
+        heuristicTop3: expect.any(Array),
+        servedTop3: expect.any(Array),
+      }),
+    );
   });
 
   it("persists structured ratings on the session and includes them in preview metadata", async () => {
@@ -223,6 +328,98 @@ describe("session flow", () => {
 
     expect(nextTurn.questionText.toLowerCase()).not.toContain("arrive early");
     expect(nextTurn.questionText.toLowerCase()).not.toContain("before booking");
+  });
+
+  it("still avoids already-mentioned facets when the AI under-detects review coverage", async () => {
+    const store = new InMemoryReviewGapStore();
+    const property: PropertyRecord = {
+      propertyId: "ai_under_detect",
+      propertySummary: "Synthetic property",
+      facetListingTexts: {
+        check_in: "check_in_start_time: 3:00 PM",
+        amenities_breakfast: "breakfast included",
+      },
+      demoFlags: [],
+    };
+    await store.upsertProperty(property);
+    await store.upsertPropertyFacetMetric({
+      propertyId: "ai_under_detect",
+      facet: "check_in",
+      importance: 0.95,
+      threshold: 0.45,
+      reliabilityClass: "high",
+      daysSince: 120,
+      stalenessScore: 0.33,
+      mentionRate: 0.01,
+      matchedReviewRate: 0.04,
+      meanCosMatchedReviews: 0.36,
+      validatedConflictCount: 1,
+      validatedConflictScore: 0.048,
+      listingTextPresent: true,
+    });
+    await store.upsertPropertyFacetMetric({
+      propertyId: "ai_under_detect",
+      facet: "amenities_breakfast",
+      importance: 0.9,
+      threshold: 0.4,
+      reliabilityClass: "high",
+      daysSince: 130,
+      stalenessScore: 0.36,
+      mentionRate: 0.0,
+      matchedReviewRate: 0.02,
+      meanCosMatchedReviews: 0.31,
+      validatedConflictCount: 1,
+      validatedConflictScore: 0.03,
+      listingTextPresent: true,
+    });
+    const session = await createReviewSession(store, { propertyId: "ai_under_detect" });
+
+    const question = await selectNextQuestion(store, underDetectingAiClient, {
+      sessionId: session.sessionId,
+      draftReview: "Check-in was smooth and the front desk was friendly.",
+    });
+
+    expect(question.facet).toBe("amenities_breakfast");
+  });
+
+  it("falls back to the deterministic question when the AI returns malformed question text", async () => {
+    const { store } = await createSeededStore();
+    const session = await createReviewSession(store, { propertyId: PARKING_PROPERTY });
+
+    const question = await selectNextQuestion(store, malformedQuestionAiClient, {
+      sessionId: session.sessionId,
+      draftReview:
+        "The room was clean, the staff were friendly, and the stay felt easy overall.",
+    });
+
+    expect(question.turnType).toBe("facet_followup");
+    expect(question.questionSource?.usedFallback).toBe(true);
+    expect(question.questionText).toBe(
+      "One quick thing: how was parking in practice, especially space, ease, or any fees?",
+    );
+  });
+
+  it("stops asking after two clarification turns and moves to drafting", async () => {
+    const { store } = await createSeededStore();
+    const session = await createReviewSession(store, { propertyId: CHECKIN_PROPERTY });
+
+    const first = await selectNextQuestion(store, undefined, {
+      sessionId: session.sessionId,
+      draftReview: "hi",
+    });
+    const second = await selectNextQuestion(store, undefined, {
+      sessionId: session.sessionId,
+      draftReview: "still not sure",
+    });
+    const third = await selectNextQuestion(store, undefined, {
+      sessionId: session.sessionId,
+      draftReview: "okay",
+    });
+
+    expect(first.turnType).toBe("clarify_review");
+    expect(second.turnType).toBe("clarify_review");
+    expect(third.turnType).toBe("no_follow_up");
+    expect(third.noFollowUp).toBe(true);
   });
 
   it("projects an authenticated review into the live corpus and first-party evidence", async () => {

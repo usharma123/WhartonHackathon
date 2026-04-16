@@ -3,9 +3,12 @@ import {
   isBlockedAutoFacet,
   type RuntimeFacet,
 } from "./facets.js";
+import { scoreLearnedRanker } from "./ranker.js";
 import type {
+  LearnedRankerArtifact,
   PropertyFacetLiveSignal,
   PropertyFacetMetric,
+  RankerSource,
   ReviewAnalysisResult,
   ScoreBreakdown,
 } from "./types.js";
@@ -65,6 +68,10 @@ export function applyLiveSignalToMetric(
 export function buildScoreBreakdown(
   metric: PropertyFacetMetric,
   analysis: Pick<ReviewAnalysisResult, "mentionedFacets" | "likelyKnownFacets">,
+  options: {
+    learnedArtifact?: LearnedRankerArtifact;
+    rankerSource?: RankerSource;
+  } = {},
 ): ScoreBreakdown {
   const alreadyMentionedPenalty = analysis.mentionedFacets.includes(metric.facet)
     ? -MENTIONED_PENALTY
@@ -88,15 +95,39 @@ export function buildScoreBreakdown(
     topDriver: metric.topDriver,
   };
 
-  breakdown.total = round(
+  const heuristicBaseScore = round(
     breakdown.importance +
       breakdown.staleness +
       breakdown.conflict +
       breakdown.coverageGap +
-      breakdown.matchedSupportGap +
-      breakdown.alreadyMentionedPenalty +
-      breakdown.reviewerKnowsBoost,
+      breakdown.matchedSupportGap,
   );
+  const sessionAdjustment = round(
+    breakdown.alreadyMentionedPenalty + breakdown.reviewerKnowsBoost,
+  );
+  const heuristicScore = round(heuristicBaseScore + sessionAdjustment);
+  const requestedSource = options.rankerSource;
+  const learnedBaseScore =
+    requestedSource && requestedSource !== "heuristic"
+      ? scoreLearnedRanker(options.learnedArtifact, metric)
+      : undefined;
+  const effectiveSource: RankerSource =
+    learnedBaseScore === undefined
+      ? "heuristic"
+      : options.learnedArtifact?.modelKind === "tree"
+        ? "learned_tree"
+        : "learned_linear";
+  const baseScore = learnedBaseScore ?? heuristicBaseScore;
+  const finalScore = round(baseScore + sessionAdjustment);
+
+  breakdown.baseModelVersion =
+    effectiveSource === "heuristic" ? undefined : options.learnedArtifact?.version;
+  breakdown.baseScore = baseScore;
+  breakdown.sessionAdjustment = sessionAdjustment;
+  breakdown.finalScore = finalScore;
+  breakdown.heuristicScore = heuristicScore;
+  breakdown.rankerSource = effectiveSource;
+  breakdown.total = finalScore;
   return breakdown;
 }
 
@@ -125,6 +156,8 @@ export function rankFacetMetrics(
   analysis: Pick<ReviewAnalysisResult, "mentionedFacets" | "likelyKnownFacets">,
   options: {
     includeSecondaryFacets?: boolean;
+    learnedArtifact?: LearnedRankerArtifact;
+    rankerSource?: RankerSource;
   } = {},
 ): Array<{ facet: RuntimeFacet; metric: PropertyFacetMetric; scoreBreakdown: ScoreBreakdown }> {
   return metrics
@@ -132,7 +165,7 @@ export function rankFacetMetrics(
     .map((metric) => ({
       facet: metric.facet,
       metric,
-      scoreBreakdown: buildScoreBreakdown(metric, analysis),
+      scoreBreakdown: buildScoreBreakdown(metric, analysis, options),
     }))
     .sort((left, right) => right.scoreBreakdown.total - left.scoreBreakdown.total);
 }

@@ -27,6 +27,7 @@ export type ArrivalTimeBucket = "morning" | "afternoon" | "evening" | "late_nigh
 export type FactPolarity = SessionSentiment;
 export type FactSeverity = "low" | "medium" | "high";
 export type EvidenceMix = "vendor" | "first_party" | "blended" | "none";
+export type RankerSource = "heuristic" | "learned_linear" | "learned_tree";
 
 export interface TripContext {
   tripType?: TripType;
@@ -201,9 +202,65 @@ export interface ScoreBreakdown {
   alreadyMentionedPenalty: number;
   reviewerKnowsBoost: number;
   total: number;
+  rankerSource?: RankerSource;
+  baseModelVersion?: string;
+  baseScore?: number;
+  sessionAdjustment?: number;
+  finalScore?: number;
+  heuristicScore?: number;
   sampleSize?: number;
   evidenceMix?: EvidenceMix;
   topDriver?: string;
+}
+
+export interface LearnedRankerFeatureStats {
+  mean: number;
+  std: number;
+}
+
+export interface LearnedLinearRankerArtifact {
+  artifactType: "learned_ranker";
+  version: string;
+  generatedAt: string;
+  modelKind: "linear";
+  featureKeys: string[];
+  featureStats: LearnedRankerFeatureStats[];
+  coefficients: number[];
+  intercept: number;
+  temporalMetrics?: Record<string, number>;
+  manualMetrics?: Record<string, number>;
+  notes?: string[];
+}
+
+export interface LearnedTreeRankerArtifact {
+  artifactType: "learned_ranker";
+  version: string;
+  generatedAt: string;
+  modelKind: "tree";
+  featureKeys: string[];
+  temporalMetrics?: Record<string, number>;
+  manualMetrics?: Record<string, number>;
+  treePayloadJson: string;
+  notes?: string[];
+}
+
+export type LearnedRankerArtifact =
+  | LearnedLinearRankerArtifact
+  | LearnedTreeRankerArtifact;
+
+export interface RankerShadowEvent {
+  id: string;
+  sessionId: string;
+  propertyId: string;
+  draftReviewHash: string;
+  heuristicTop3: RuntimeFacet[];
+  learnedTop3: RuntimeFacet[];
+  servedTop3: RuntimeFacet[];
+  finalServedFacet: RuntimeFacet | null;
+  rankerSource: RankerSource;
+  baseModelVersion?: string;
+  disagreed: boolean;
+  createdAt: string;
 }
 
 export interface ReviewAnalysisResult {

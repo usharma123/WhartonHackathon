@@ -5,7 +5,11 @@ import { actionGeneric } from "convex/server";
 import { v } from "convex/values";
 
 import { internal } from "./_generated/api";
-import { createConvexActionStore, loadFacetClassifierArtifactFromConvex } from "./actionStore.js";
+import {
+  createConvexActionStore,
+  loadFacetClassifierArtifactFromConvex,
+  loadLearnedRankerArtifactFromConvex,
+} from "./actionStore.js";
 import { OpenAIReviewGapClient } from "../src/backend/ai.js";
 import {
   analyzeDraftReview as analyzeDraftReviewService,
@@ -42,7 +46,14 @@ export const selectNextQuestion = actionGeneric({
     const store = createConvexActionStore(ctx);
     await requireSessionOwnership(store, args.sessionId, tokenIdentifier);
     const classifierArtifact = await loadFacetClassifierArtifactFromConvex(ctx);
-    return selectNextQuestionService(store, makeAIClient(), args, classifierArtifact);
+    const learnedRankerArtifact = await loadLearnedRankerArtifactFromConvex(ctx);
+    return selectNextQuestionService(
+      store,
+      makeAIClient(),
+      args,
+      classifierArtifact,
+      learnedRankerArtifact,
+    );
   },
 });
 

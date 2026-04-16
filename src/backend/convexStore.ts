@@ -7,6 +7,7 @@ import type {
   PropertyFacetMetric,
   PropertyRecord,
   PropertyValidationState,
+  RankerShadowEvent,
   StoredFollowUpAnswer,
   StoredFollowUpQuestion,
   StoredReviewSession,
@@ -387,6 +388,27 @@ export function createConvexStore(db: ConvexDb): ReviewGapStore {
           left.updatedAt.localeCompare(right.updatedAt),
         );
     },
+
+    async createRankerShadowEvent(event) {
+      const id = await db.insert("rankerShadowEvents", rankerShadowEventDoc(event));
+      const created = await db.get(id);
+      if (!created) {
+        throw new Error("Missing ranker shadow event after insert.");
+      }
+      return mapRankerShadowEvent(created);
+    },
+
+    async listRankerShadowEvents(sessionId) {
+      const docs = await db
+        .query("rankerShadowEvents")
+        .withIndex("by_session_id", (q: any) => q.eq("sessionId", sessionId))
+        .collect();
+      return docs
+        .map(mapRankerShadowEvent)
+        .sort((left: RankerShadowEvent, right: RankerShadowEvent) =>
+          left.createdAt.localeCompare(right.createdAt),
+        );
+    },
   };
 }
 
@@ -669,6 +691,39 @@ function mapUpdate(doc: any): PropertyEvidenceUpdate {
 
 function updateDoc(update: Omit<PropertyEvidenceUpdate, "id">) {
   return update;
+}
+
+function mapRankerShadowEvent(doc: any): RankerShadowEvent {
+  return {
+    id: String(doc._id),
+    sessionId: doc.sessionId,
+    propertyId: doc.propertyId,
+    draftReviewHash: doc.draftReviewHash,
+    heuristicTop3: doc.heuristicTop3 ?? [],
+    learnedTop3: doc.learnedTop3 ?? [],
+    servedTop3: doc.servedTop3 ?? [],
+    finalServedFacet: doc.finalServedFacet ?? null,
+    rankerSource: doc.rankerSource,
+    baseModelVersion: doc.baseModelVersion ?? undefined,
+    disagreed: doc.disagreed ?? false,
+    createdAt: doc.createdAt,
+  };
+}
+
+function rankerShadowEventDoc(event: Omit<RankerShadowEvent, "id">) {
+  return omitNullish({
+    sessionId: event.sessionId,
+    propertyId: event.propertyId,
+    draftReviewHash: event.draftReviewHash,
+    heuristicTop3: event.heuristicTop3,
+    learnedTop3: event.learnedTop3,
+    servedTop3: event.servedTop3,
+    finalServedFacet: event.finalServedFacet ?? undefined,
+    rankerSource: event.rankerSource,
+    baseModelVersion: event.baseModelVersion,
+    disagreed: event.disagreed,
+    createdAt: event.createdAt,
+  });
 }
 
 function probabilitiesToEntries(

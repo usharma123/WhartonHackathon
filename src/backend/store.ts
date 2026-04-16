@@ -6,6 +6,7 @@ import type {
   PropertyFacetMetric,
   PropertyRecord,
   PropertyValidationState,
+  RankerShadowEvent,
   StoredFollowUpAnswer,
   StoredFollowUpQuestion,
   StoredReviewSession,
@@ -87,6 +88,10 @@ export interface ReviewGapStore {
     review: Omit<UserPropertyReview, "id">,
   ): Promise<UserPropertyReview>;
   listUserPropertyReviews(propertyId: string): Promise<UserPropertyReview[]>;
+  createRankerShadowEvent(
+    event: Omit<RankerShadowEvent, "id">,
+  ): Promise<RankerShadowEvent>;
+  listRankerShadowEvents(sessionId: string): Promise<RankerShadowEvent[]>;
 }
 
 export class InMemoryReviewGapStore implements ReviewGapStore {
@@ -100,12 +105,14 @@ export class InMemoryReviewGapStore implements ReviewGapStore {
   private readonly answers = new Map<string, StoredFollowUpAnswer>();
   private readonly updates = new Map<string, PropertyEvidenceUpdate>();
   private readonly userReviews = new Map<string, UserPropertyReview>();
+  private readonly rankerShadowEvents = new Map<string, RankerShadowEvent>();
   private readonly counters = {
     session: 0,
     question: 0,
     answer: 0,
     update: 0,
     review: 0,
+    rankerShadowEvent: 0,
   };
 
   now(): string {
@@ -408,6 +415,20 @@ export class InMemoryReviewGapStore implements ReviewGapStore {
     return [...this.userReviews.values()]
       .filter((review) => review.propertyId === propertyId)
       .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt));
+  }
+
+  async createRankerShadowEvent(
+    event: Omit<RankerShadowEvent, "id">,
+  ): Promise<RankerShadowEvent> {
+    const stored = { ...event, id: this.nextId("rankerShadowEvent") };
+    this.rankerShadowEvents.set(stored.id, stored);
+    return stored;
+  }
+
+  async listRankerShadowEvents(sessionId: string): Promise<RankerShadowEvent[]> {
+    return [...this.rankerShadowEvents.values()]
+      .filter((event) => event.sessionId === sessionId)
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
   }
 
   private nextId(prefix: keyof InMemoryReviewGapStore["counters"]): string {

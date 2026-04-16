@@ -5,7 +5,7 @@ import { createConvexStore } from "../src/backend/convexStore.js";
 import { seedRuntimeBundle, type RuntimeBundle } from "../src/backend/runtimeBundle.js";
 import type { FacetClassifierArtifact } from "../src/backend/ml.js";
 import { importExpediaPropertySnapshot } from "../src/backend/liveValidation.js";
-import type { ImportedExpediaPropertySnapshot } from "../src/backend/types.js";
+import type { ImportedExpediaPropertySnapshot, LearnedRankerArtifact } from "../src/backend/types.js";
 
 export const importRuntimeBundle = mutationGeneric({
   args: {
@@ -92,6 +92,48 @@ export const importExpediaSubset = mutationGeneric({
     }
     return {
       importedProperties: imported,
+    };
+  },
+});
+
+export const importLearnedRankerArtifact = mutationGeneric({
+  args: {
+    artifact: v.any(),
+  },
+  handler: async (ctx, args) => {
+    const artifact = normalizeLearnedRankerArtifact(args.artifact);
+    const existing = await ctx.db
+      .query("learnedRankerArtifacts")
+      .withIndex("by_artifact_type", (q) => q.eq("artifactType", "learned_ranker"))
+      .unique();
+    const payload = {
+      artifactType: artifact.artifactType,
+      version: artifact.version,
+      generatedAt: artifact.generatedAt,
+      modelKind: artifact.modelKind,
+      featureKeys: artifact.featureKeys,
+      featureStats: artifact.modelKind === "linear" ? artifact.featureStats : undefined,
+      coefficients: artifact.modelKind === "linear" ? artifact.coefficients : undefined,
+      intercept: artifact.modelKind === "linear" ? artifact.intercept : undefined,
+      treePayloadJson: artifact.modelKind === "tree" ? artifact.treePayloadJson : undefined,
+      temporalMetricsJson: artifact.temporalMetrics
+        ? JSON.stringify(artifact.temporalMetrics)
+        : undefined,
+      manualMetricsJson: artifact.manualMetrics
+        ? JSON.stringify(artifact.manualMetrics)
+        : undefined,
+      notes: artifact.notes,
+    };
+    if (existing) {
+      await ctx.db.patch(existing._id, payload);
+    } else {
+      await ctx.db.insert("learnedRankerArtifacts", payload);
+    }
+    return {
+      artifactType: artifact.artifactType,
+      version: artifact.version,
+      modelKind: artifact.modelKind,
+      featureCount: artifact.featureKeys.length,
     };
   },
 });
@@ -189,4 +231,34 @@ function normalizeFacetClassifierArtifact(raw: any): FacetClassifierArtifact {
     idf: raw.idf,
     models: raw.models,
   } satisfies FacetClassifierArtifact;
+}
+
+function normalizeLearnedRankerArtifact(raw: any): LearnedRankerArtifact {
+  if (raw?.artifactType === "learned_ranker" && raw?.modelKind === "tree") {
+    return {
+      artifactType: "learned_ranker",
+      version: raw.version,
+      generatedAt: raw.generatedAt,
+      modelKind: "tree",
+      featureKeys: raw.featureKeys ?? [],
+      temporalMetrics: raw.temporalMetrics,
+      manualMetrics: raw.manualMetrics,
+      treePayloadJson: raw.treePayloadJson,
+      notes: raw.notes ?? [],
+    };
+  }
+
+  return {
+    artifactType: "learned_ranker",
+    version: raw.version,
+    generatedAt: raw.generatedAt,
+    modelKind: "linear",
+    featureKeys: raw.featureKeys ?? [],
+    featureStats: raw.featureStats ?? [],
+    coefficients: raw.coefficients ?? [],
+    intercept: raw.intercept ?? 0,
+    temporalMetrics: raw.temporalMetrics,
+    manualMetrics: raw.manualMetrics,
+    notes: raw.notes ?? [],
+  };
 }
