@@ -170,7 +170,7 @@ describe("session flow", () => {
     });
 
     expect(preview.reviewText).toBe(
-      "I had a smooth check-in and the room was clean. Overall, I’d rate this stay 8 out of 10.",
+      "I had a smooth check-in and the room was clean. I'd rate this stay 8 out of 10.",
     );
   });
 

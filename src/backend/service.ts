@@ -331,7 +331,7 @@ export async function finalizeReviewPreview(
     usedOpenAI: preview.usedOpenAI,
     usedFallback: preview.usedFallback,
     confirmationPrompt:
-      "Does this reflect what you experienced? Reply yes to save it, or tell me what to change.",
+      "Does this reflect what you experienced? Reply yes to submit it, or say no and edit it.",
   };
 }
 

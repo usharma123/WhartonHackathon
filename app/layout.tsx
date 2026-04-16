@@ -1,15 +1,14 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
-import { Fraunces, Instrument_Sans, IBM_Plex_Mono } from "next/font/google";
+import { Fraunces, IBM_Plex_Mono, Plus_Jakarta_Sans } from "next/font/google";
 
 import { Providers } from "./providers";
 import "./globals.css";
 
-const sans = Instrument_Sans({
+const sans = Plus_Jakarta_Sans({
   subsets: ["latin"],
   variable: "--font-sans",
   weight: ["400", "500", "600", "700"],
-  style: ["normal", "italic"],
 });
 
 const display = Fraunces({

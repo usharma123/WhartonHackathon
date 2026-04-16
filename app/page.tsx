@@ -1749,11 +1749,7 @@ function ChatView({
                   className="iv-confirm-yes"
                   onClick={onApproveReview}
                 >
-                  <span className="yes-em">
-                    <em>Yes</em>
-                    <span className="yes-sep">·</span>
-                    file it
-                  </span>
+                  <span className="yes-em">Submit review</span>
                   <span className="yes-arr">→</span>
                 </button>
                 <button
@@ -1761,7 +1757,7 @@ function ChatView({
                   className="iv-confirm-no"
                   onClick={() => textareaRef.current?.focus()}
                 >
-                  Tell me what to change
+                  No, I'll edit it
                 </button>
               </div>
             )}
@@ -1927,10 +1923,10 @@ function buildRatingSummary(
     .map(([key, label]) => `${label} ${aspectRatings[key]}/5`);
 
   if (aspectParts.length === 0) {
-    return `Overall rating: ${overallRating}/10`;
+    return `${overallRating}/10 overall`;
   }
 
-  return `Overall rating: ${overallRating}/10 · ${aspectParts.join(" · ")}`;
+  return `${overallRating}/10 overall · ${aspectParts.join(" · ")}`;
 }
 
 function MicIcon() {

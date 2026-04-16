@@ -379,7 +379,7 @@ export function appendOverallRatingIfMissing(
   if (mentionsOverallRating(normalized, overallRating)) {
     return ensureSentenceEnd(normalized);
   }
-  return `${ensureSentenceEnd(normalized)} Overall, I’d rate this stay ${overallRating} out of 10.`;
+  return `${ensureSentenceEnd(normalized)} I'd rate this stay ${overallRating} out of 10.`;
 }
 
 function ensureSentenceEnd(text: string): string {
