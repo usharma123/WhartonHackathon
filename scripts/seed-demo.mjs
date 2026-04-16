@@ -25,6 +25,13 @@ const classifierArtifact = JSON.parse(
     "utf8",
   ),
 );
+const learnedRankerPath = path.join(
+  root,
+  "EDA",
+  "data_artifacts",
+  "runtime",
+  "learned_ranker_artifact.json",
+);
 const serializedClassifierArtifact = {
   ...classifierArtifact,
   vocabularyEntries: Object.entries(classifierArtifact.vocabulary).map(([term, index]) => ({
@@ -40,9 +47,21 @@ const runtimeResult = await client.mutation("admin:importRuntimeBundle", {
 const classifierResult = await client.mutation("admin:importFacetClassifierArtifact", {
   artifact: serializedClassifierArtifact,
 });
+let learnedRankerResult = null;
+try {
+  const learnedRankerArtifact = JSON.parse(await readFile(learnedRankerPath, "utf8"));
+  learnedRankerResult = await client.mutation("admin:importLearnedRankerArtifact", {
+    artifact: learnedRankerArtifact,
+  });
+} catch {
+  learnedRankerResult = null;
+}
 
 console.log("Seeded runtime bundle:", runtimeResult);
 console.log("Seeded classifier artifact:", classifierResult);
+if (learnedRankerResult) {
+  console.log("Seeded learned ranker artifact:", learnedRankerResult);
+}
 
 async function loadEnv(cwd) {
   const envFiles = [".env.local", ".env"];

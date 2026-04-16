@@ -1,0 +1,24 @@
+{
+  "artifactType": "learned_ranker",
+  "version": "2026-04-16T02:53:56Z-tree",
+  "generatedAt": "2026-04-16T02:53:56Z",
+  "modelKind": "tree",
+  "featureKeys": [
+    "importance",
+    "daysSince",
+    "stalenessScore",
+    "mentionRate",
+    "matchedReviewRate",
+    "meanCosMatchedReviews",
+    "validatedConflictScore",
+    "validatedConflictCount",
+    "preCutoffReviewCount",
+    "reliability_high",
+    "reliability_medium"
+  ],
+  "notes": [
+    "Experimental sklearn GradientBoostingRegressor reranker.",
+    "Tree model is offline-only in v1 and not loaded into runtime scoring."
+  ],
+  "treePayloadJson": "{\"model\": \"GradientBoostingRegressor\", \"params\": {\"alpha\": 0.9, \"ccp_alpha\": 0.0, \"criterion\": \"friedman_mse\", \"init\": null, \"learning_rate\": 0.1, \"loss\": \"squared_error\", \"max_depth\": 3, \"max_features\": null, \"max_leaf_nodes\": null, \"min_impurity_decrease\": 0.0, \"min_samples_leaf\": 1, \"min_samples_split\": 2, \"min_weight_fraction_leaf\": 0.0, \"n_estimators\": 100, \"n_iter_no_change\": null, \"random_state\": 42, \"subsample\": 1.0, \"tol\": 0.0001, \"validation_fraction\": 0.1, \"verbose\": 0, \"warm_start\": false}, \"featureImportances\": {\"importance\": 0.016052059505260688, \"daysSince\": 0.13010025208504186, \"stalenessScore\": 0.11500860514737117, \"mentionRate\": 0.19568509435335957, \"matchedReviewRate\": 0.10151341625430413, \"meanCosMatchedReviews\": 0.17176248511678796, \"validatedConflictScore\": 0.08337059959960937, \"validatedConflictCount\": 0.014312959199156932, \"preCutoffReviewCount\": 0.17123570458961276, \"reliability_high\": 0.0009554506073676325, \"reliability_medium\": 3.3735421279523077e-06}}"
+}

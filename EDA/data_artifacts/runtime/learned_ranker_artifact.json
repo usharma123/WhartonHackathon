@@ -1,0 +1,83 @@
+{
+  "artifactType": "learned_ranker",
+  "version": "2026-04-16T02:53:56Z-linear",
+  "generatedAt": "2026-04-16T02:53:56Z",
+  "modelKind": "linear",
+  "featureKeys": [
+    "importance",
+    "daysSince",
+    "stalenessScore",
+    "mentionRate",
+    "matchedReviewRate",
+    "meanCosMatchedReviews",
+    "validatedConflictScore",
+    "validatedConflictCount",
+    "preCutoffReviewCount",
+    "reliability_high",
+    "reliability_medium"
+  ],
+  "featureStats": [
+    {
+      "mean": 0.8410520487264673,
+      "std": 0.10140377145688864
+    },
+    {
+      "mean": 76.85825027685493,
+      "std": 138.7055880296404
+    },
+    {
+      "mean": 0.17975991140642303,
+      "std": 0.2417010188945309
+    },
+    {
+      "mean": 0.09450201055335727,
+      "std": 0.06375189395421187
+    },
+    {
+      "mean": 0.09450201055335727,
+      "std": 0.06375189395421187
+    },
+    {
+      "mean": 0.47207884574311015,
+      "std": 0.02986557662956743
+    },
+    {
+      "mean": 0.02066766179103818,
+      "std": 0.019932353065710118
+    },
+    {
+      "mean": 1.4684385382059801,
+      "std": 1.6004050215284293
+    },
+    {
+      "mean": 335.5537098560354,
+      "std": 133.00403055147183
+    },
+    {
+      "mean": 0.9136212624584718,
+      "std": 0.2809225004200625
+    },
+    {
+      "mean": 0.08637873754152824,
+      "std": 0.2809225004200625
+    }
+  ],
+  "coefficients": [
+    -0.03144698139478529,
+    -0.2534808747873826,
+    1.2874654359982736,
+    0.46678727741004195,
+    0.46678727741004195,
+    -0.050349670205067365,
+    0.2857248664711373,
+    -0.2918399058129356,
+    0.0,
+    0.11153150395592563,
+    -0.11153150395592563
+  ],
+  "intercept": -1.1863539571206829e-17,
+  "notes": [
+    "Temporal monthly snapshots with 180-day lookahead.",
+    "Base score only; runtime session adjustments remain deterministic."
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "temporal": {
+    "heuristic": {
+      "ndcg@1": 0.4565208336522112,
+      "ndcg@3": 0.5668711670062531,
+      "mrr": 0.42121212121212126,
+      "top1_conflict_recall": 0.025974025974025976,
+      "top1_support_recall": 0.8181818181818182,
+      "groups": 77.0
+    },
+    "learned_linear": {
+      "ndcg@1": 0.6196225549109615,
+      "ndcg@3": 0.7424588897639919,
+      "mrr": 0.5696969696969697,
+      "top1_conflict_recall": 0.0,
+      "top1_support_recall": 0.8051948051948052,
+      "groups": 77.0
+    },
+    "learned_tree": {
+      "ndcg@1": 0.7061540382330425,
+      "ndcg@3": 0.7692404259062237,
+      "mrr": 0.645887445887446,
+      "top1_conflict_recall": 0.06493506493506493,
+      "top1_support_recall": 0.8831168831168831,
+      "groups": 77.0
+    }
+  },
+  "manual": null,
+  "acceptance": {
+    "linear_promote": false,
+    "tree_promote": false
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "generatedAt": "2026-04-16T02:53:56Z",
+  "snapshotRows": 1326,
+  "trainRows": 903,
+  "testRows": 423,
+  "pairwiseTrainingRows": 3774,
+  "featureKeys": [
+    "importance",
+    "daysSince",
+    "stalenessScore",
+    "mentionRate",
+    "matchedReviewRate",
+    "meanCosMatchedReviews",
+    "validatedConflictScore",
+    "validatedConflictCount",
+    "preCutoffReviewCount",
+    "reliability_high",
+    "reliability_medium"
+  ],
+  "utilityStats": {
+    "future_conflict_max": {
+      "mean": 0.00415875803955633,
+      "std": 0.01230969689827967
+    },
+    "future_support_rate": {
+      "mean": 0.09068429353165618,
+      "std": 0.07463464764811793
+    },
+    "future_freshness_relief": {
+      "mean": 0.1058447242524917,
+      "std": 0.19621629240284638
+    }
+  },
+  "linearVersion": "2026-04-16T02:53:56Z-linear",
+  "treeVersion": "2026-04-16T02:53:56Z-tree"
+}
