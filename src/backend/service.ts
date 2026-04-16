@@ -333,16 +333,24 @@ export async function finalizeReviewPreview(
   aiClient: ReviewGapAIClient | undefined,
   input: FinalizeReviewPreviewInput,
 ): Promise<FinalizeReviewPreviewResult> {
-  const session = await requireSession(store, input.sessionId);
+  let session = await requireSession(store, input.sessionId);
   const property = await requireProperty(store, session.propertyId);
   const answers = await store.listFollowUpAnswers(session.id);
   const relevantAnswers = answers.filter((answer) => !isUnknownAnswer(answer.answerText));
   const updatedAt = store.now();
+  const inferredRatings = inferStructuredRatings(
+    input.draftReview,
+    relevantAnswers.map((answer) => answer.answerText),
+  );
+  const nextOverallRating = session.overallRating ?? inferredRatings.overallRating;
+  const nextAspectRatings = session.aspectRatings ?? inferredRatings.aspectRatings;
 
-  await store.updateReviewSession(session.id, {
+  session = await store.updateReviewSession(session.id, {
     draftReview: input.draftReview,
     conversationStage: "awaiting_confirmation",
     selectedFacet: null,
+    overallRating: nextOverallRating,
+    aspectRatings: nextAspectRatings,
     tripContext: deriveTripContext(input.draftReview, relevantAnswers.map((answer) => answer.answerText)),
     updatedAt,
   });
@@ -376,8 +384,8 @@ export async function finalizeReviewPreview(
     draftReview: input.draftReview,
     answers: relevantAnswers.map((answer) => ({ facet: answer.facet, answerText: answer.answerText })),
     structuredFacts: confirmedFacts,
-    overallRating: session.overallRating,
-    aspectRatings: session.aspectRatings,
+    overallRating: nextOverallRating,
+    aspectRatings: nextAspectRatings,
     revisionNotes: input.revisionNotes,
   });
 
@@ -385,8 +393,8 @@ export async function finalizeReviewPreview(
     reviewText: preview.reviewText,
     factCandidates,
     tripContext,
-    overallRating: session.overallRating,
-    aspectRatings: session.aspectRatings,
+    overallRating: nextOverallRating,
+    aspectRatings: nextAspectRatings,
     usedOpenAI: preview.usedOpenAI,
     usedFallback: preview.usedFallback,
     confirmationPrompt:
@@ -400,7 +408,24 @@ export async function confirmEnhancedReview(
   sourceReviewAggregate?: { guestRating?: number; reviewCount: number },
   classifierArtifact?: FacetClassifierArtifact,
 ): Promise<void> {
-  const session = await requireSession(store, input.sessionId);
+  let session = await requireSession(store, input.sessionId);
+  if (typeof session.overallRating !== "number") {
+    const answers = await store.listFollowUpAnswers(input.sessionId);
+    const inferredRatings = inferStructuredRatings(
+      session.draftReview,
+      [
+        ...answers.map((answer) => answer.answerText),
+        input.finalReviewText,
+      ],
+    );
+    if (typeof inferredRatings.overallRating === "number") {
+      session = await store.updateReviewSession(input.sessionId, {
+        overallRating: inferredRatings.overallRating,
+        aspectRatings: session.aspectRatings ?? inferredRatings.aspectRatings,
+        updatedAt: store.now(),
+      });
+    }
+  }
   if (typeof session.overallRating !== "number") {
     throw new Error("Overall rating is required before saving the review.");
   }
@@ -1026,6 +1051,52 @@ function normalizeAspectRatings(
     ),
   ) as AspectRatings;
   return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function inferStructuredRatings(
+  primaryText: string,
+  secondaryTexts: string[] = [],
+): { overallRating?: number; aspectRatings?: AspectRatings } {
+  const text = [primaryText, ...secondaryTexts]
+    .filter((value) => typeof value === "string" && value.trim().length > 0)
+    .join(" ");
+
+  if (!text) {
+    return {};
+  }
+
+  const overallMatch = text.match(/\b(10|[1-9])\s*\/\s*10\b|\b(10|[1-9])\s+out of\s+10\b/i);
+  const overallCandidate = overallMatch
+    ? Number.parseInt((overallMatch[1] ?? overallMatch[2]) as string, 10)
+    : undefined;
+  const overallRating =
+    typeof overallCandidate === "number" && Number.isFinite(overallCandidate)
+      ? overallCandidate
+      : undefined;
+
+  const aspectMatchers: Array<[keyof AspectRatings, RegExp]> = [
+    ["service", /\bservice\b\s*[:=-]?\s*(5|[1-4])\s*\/\s*5\b/i],
+    ["cleanliness", /\bcleanliness\b\s*[:=-]?\s*(5|[1-4])\s*\/\s*5\b/i],
+    ["amenities", /\bamenities\b\s*[:=-]?\s*(5|[1-4])\s*\/\s*5\b/i],
+    ["value", /\bvalue\b\s*[:=-]?\s*(5|[1-4])\s*\/\s*5\b/i],
+  ];
+  const aspectRatings = normalizeAspectRatings(
+    Object.fromEntries(
+      aspectMatchers.flatMap(([key, pattern]) => {
+        const match = text.match(pattern);
+        if (!match) {
+          return [];
+        }
+        const value = Number.parseInt(match[1]!, 10);
+        return Number.isFinite(value) ? [[key, value]] : [];
+      }),
+    ) as AspectRatings,
+  );
+
+  return {
+    ...(typeof overallRating === "number" ? { overallRating } : {}),
+    ...(aspectRatings ? { aspectRatings } : {}),
+  };
 }
 
 export type { RuntimeFacet };

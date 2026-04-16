@@ -265,6 +265,63 @@ describe("session flow", () => {
     expect(preview.aspectRatings).toEqual({ service: 4, cleanliness: 5 });
   });
 
+  it("infers structured ratings from freeform review text before preview and save", async () => {
+    const { store } = await createSeededStore();
+    const draftReview =
+      "7/10 overall · service 3/5 · cleanliness 3/5 · amenities 3/5 · value 3/5 The parking was limited, but breakfast was nice and staff was nice.";
+    const session = await createReviewSession(store, {
+      propertyId: PARKING_PROPERTY,
+      draftReview,
+      tokenIdentifier: "clerk:user_inferred",
+    });
+
+    await submitFollowUpAnswer(store, {
+      sessionId: session.sessionId,
+      facet: "amenities_parking",
+      answerText: "it was limited",
+    });
+
+    const preview = await finalizeReviewPreview(store, undefined, {
+      sessionId: session.sessionId,
+      draftReview,
+    });
+    const updatedSession = await store.getReviewSession(session.sessionId);
+
+    expect(updatedSession?.overallRating).toBe(7);
+    expect(updatedSession?.aspectRatings).toEqual({
+      service: 3,
+      cleanliness: 3,
+      amenities: 3,
+      value: 3,
+    });
+    expect(preview.overallRating).toBe(7);
+    expect(preview.aspectRatings).toEqual({
+      service: 3,
+      cleanliness: 3,
+      amenities: 3,
+      value: 3,
+    });
+
+    await expect(
+      confirmEnhancedReview(store, {
+        sessionId: session.sessionId,
+        tokenIdentifier: "clerk:user_inferred",
+        finalReviewText: preview.reviewText,
+        factCandidates: preview.factCandidates,
+        confirmedFactIds: selectedFactIds(preview),
+      }),
+    ).resolves.toBeUndefined();
+
+    const savedReviews = await store.listUserPropertyReviews(PARKING_PROPERTY);
+    expect(savedReviews.at(-1)?.overallRating).toBe(7);
+    expect(savedReviews.at(-1)?.aspectRatings).toEqual({
+      service: 3,
+      cleanliness: 3,
+      amenities: 3,
+      value: 3,
+    });
+  });
+
   it("appends the overall rating sentence when the AI review body omits it", async () => {
     const { store } = await createSeededStore();
     const session = await createReviewSession(store, { propertyId: PARKING_PROPERTY });
