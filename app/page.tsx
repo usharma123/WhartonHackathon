@@ -152,6 +152,58 @@ const PHASE_COPY: Record<
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
+function isValidNextTurn(value: unknown): value is NextTurn {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<NextTurn>;
+  if (
+    candidate.turnType === "clarify_review" ||
+    candidate.turnType === "no_follow_up"
+  ) {
+    return typeof candidate.assistantText === "string";
+  }
+  if (candidate.turnType === "facet_followup") {
+    return (
+      typeof candidate.assistantText === "string" &&
+      typeof candidate.facet === "string" &&
+      candidate.facet.length > 0 &&
+      typeof candidate.questionText === "string" &&
+      candidate.questionText.length > 0
+    );
+  }
+  return false;
+}
+
+function hasValidPreviewPayload(
+  value: unknown,
+): value is {
+  reviewText: string;
+  factCandidates: Array<{
+    id: string;
+    facet: string;
+    factType: string;
+    value: unknown;
+    confidence: number;
+    source: "draft_review" | "follow_up_answer";
+    sourceText: string;
+    editable: boolean;
+    selectedByDefault: boolean;
+  }>;
+  tripContext?: TripContext | null;
+  confirmationPrompt: string;
+} {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as {
+    reviewText?: unknown;
+    factCandidates?: unknown;
+    confirmationPrompt?: unknown;
+  };
+  return (
+    typeof candidate.reviewText === "string" &&
+    Array.isArray(candidate.factCandidates) &&
+    typeof candidate.confirmationPrompt === "string"
+  );
+}
+
 /* ═══════════════════════════════════════════════════════
    Root Page
    ═══════════════════════════════════════════════════════ */
@@ -476,10 +528,13 @@ function AuthenticatedApp() {
         activeSessionId = session.sessionId;
         setSessionId(session.sessionId);
       }
-      const next = (await selectNextQuestion({
+      const next = await selectNextQuestion({
         sessionId: activeSessionId,
         draftReview,
-      })) as NextTurn;
+      });
+      if (!isValidNextTurn(next)) {
+        throw new Error("Received an invalid follow-up response.");
+      }
       await handleNextTurn(activeSessionId, draftReview, next);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Something went wrong.");
@@ -610,10 +665,13 @@ function AuthenticatedApp() {
       if (keepGoing && sessionId) {
         try {
           const conversationDraft = [activeReviewDraft, ...nextAnswerHistory].join(" ").trim();
-          const next = (await selectNextQuestion({
+          const next = await selectNextQuestion({
             sessionId,
             draftReview: conversationDraft,
-          })) as NextTurn;
+          });
+          if (!isValidNextTurn(next)) {
+            throw new Error("Received an invalid follow-up response.");
+          }
 
           if (
             next.turnType === "facet_followup" &&
@@ -648,6 +706,9 @@ function AuthenticatedApp() {
       draftReview,
       revisionNotes: notes.length > 0 ? notes : undefined,
     });
+    if (!hasValidPreviewPayload(preview)) {
+      throw new Error("Received an invalid review preview.");
+    }
 
     setFacts(
       preview.factCandidates.map((fact) => ({
