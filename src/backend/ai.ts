@@ -119,15 +119,19 @@ export async function analyzeReviewWithFallback(
       }),
       input.eligibleFacets,
     );
+    const mentionedFacets = dedupeFacetList([
+      ...fallback.mentionedFacets,
+      ...result.mentionedFacets,
+      ...mlMentioned,
+    ]);
+    const likelyKnownFacets = dedupeFacetList([
+      ...fallback.likelyKnownFacets,
+      ...result.likelyKnownFacets,
+      ...mlLikelyKnown,
+    ]);
     return {
-      mentionedFacets:
-        mlMentioned.length > 0
-          ? dedupeFacetList(mlMentioned)
-          : result.mentionedFacets,
-      likelyKnownFacets:
-        mlLikelyKnown.length > 0
-          ? dedupeFacetList(mlLikelyKnown)
-          : result.likelyKnownFacets,
+      mentionedFacets,
+      likelyKnownFacets,
       sentiment: result.sentiment,
       reviewReady: readiness.reviewReady,
       readinessReason: readiness.readinessReason,
@@ -179,7 +183,11 @@ export async function generateQuestionWithFallback(
     return { ...fallback, usedFallback: true };
   }
   try {
-    const result = await client.generateQuestion(input);
+    const result = normalizeQuestionPayload(await client.generateQuestion(input));
+    if (!result) {
+      const fallback = generateQuestionFallback(input);
+      return { ...fallback, usedFallback: true };
+    }
     return { ...result, usedFallback: false };
   } catch {
     const fallback = generateQuestionFallback(input);
@@ -328,9 +336,12 @@ export class OpenAIReviewGapClient implements ReviewGapAIClient {
       [
         "You are phrasing a single follow-up question.",
         "Return JSON with questionText and voiceText.",
+        "Ask exactly one question.",
         "Do not change the chosen facet.",
         "Keep it short, natural, specific, and retrospective.",
         "Ask only about what the traveler personally experienced.",
+        "Do not ask about details already explicitly stated in the draft review.",
+        "If the draft already partially covers the chosen facet, ask only for the single missing detail.",
         "Do not ask hypothetical or policy lookup questions.",
       ].join(" "),
       JSON.stringify(input),
@@ -346,7 +357,8 @@ export class OpenAIReviewGapClient implements ReviewGapAIClient {
       [
         "You are helping a traveler turn a vague hotel review into a more substantive one.",
         "Return JSON with assistantText only.",
-        "Ask for one or two specific details from the stay.",
+        "Ask for exactly one specific detail from the stay.",
+        "Return one short follow-up, not a list and not multiple questions.",
         "Do not ask a property rules-engine question yet.",
         "Keep it conversational, short, and natural.",
       ].join(" "),
@@ -462,6 +474,27 @@ function asSentiment(value: unknown): ReviewAnalysisResult["sentiment"] {
     return value;
   }
   return "neutral";
+}
+
+function normalizeQuestionPayload(
+  payload: Partial<{ questionText: string; voiceText: string }> | undefined,
+): { questionText: string; voiceText: string } | null {
+  const questionText = asNonEmptyString(payload?.questionText);
+  if (!questionText) {
+    return null;
+  }
+  return {
+    questionText,
+    voiceText: asNonEmptyString(payload?.voiceText) ?? questionText,
+  };
+}
+
+function asNonEmptyString(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
 }
 
 function normalizeStructuredFacts(
