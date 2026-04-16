@@ -22,6 +22,11 @@ const structuredFactValidator = v.object({
   factType: v.string(),
   value: factValue,
   confidence: v.number(),
+  firsthandConfidence: v.optional(v.number()),
+  polarity: v.optional(v.string()),
+  severity: v.optional(v.string()),
+  resolved: v.optional(v.boolean()),
+  sourceSnippet: v.optional(v.string()),
 });
 
 const aspectRatingsValidator = v.object({
@@ -29,6 +34,13 @@ const aspectRatingsValidator = v.object({
   cleanliness: v.optional(v.number()),
   amenities: v.optional(v.number()),
   value: v.optional(v.number()),
+});
+
+const tripContextValidator = v.object({
+  tripType: v.optional(v.string()),
+  stayLengthBucket: v.optional(v.string()),
+  arrivalTimeBucket: v.optional(v.string()),
+  roomType: v.optional(v.string()),
 });
 
 const scoreBreakdownValidator = v.object({
@@ -40,6 +52,9 @@ const scoreBreakdownValidator = v.object({
   alreadyMentionedPenalty: v.number(),
   reviewerKnowsBoost: v.number(),
   total: v.number(),
+  sampleSize: v.optional(v.number()),
+  evidenceMix: v.optional(v.string()),
+  topDriver: v.optional(v.string()),
 });
 
 export default defineSchema({
@@ -116,7 +131,19 @@ export default defineSchema({
         v.literal("error"),
       ),
     ),
+    vendorReviewCount: v.optional(v.number()),
+    firstPartyReviewCount: v.optional(v.number()),
     liveReviewCount: v.optional(v.number()),
+    lastRecomputedAt: v.optional(v.string()),
+    recomputeStatus: v.optional(
+      v.union(
+        v.literal("idle"),
+        v.literal("recomputing"),
+        v.literal("ready"),
+        v.literal("error"),
+      ),
+    ),
+    recomputeSourceVersion: v.optional(v.number()),
   }).index("by_property_id", ["propertyId"]),
 
   propertyFacetMetrics: defineTable({
@@ -186,6 +213,14 @@ export default defineSchema({
     listingTextPresent: v.boolean(),
     reviewCountSampled: v.number(),
     supportSnippetCount: v.number(),
+    vendorReviewCountSampled: v.number(),
+    vendorSupportSnippetCount: v.number(),
+    firstPartyReviewCountSampled: v.number(),
+    firstPartySupportSnippetCount: v.number(),
+    sampleConfidence: v.number(),
+    weightedSupportRate: v.number(),
+    evidenceMix: v.string(),
+    topDriver: v.string(),
     fetchedAt: v.string(),
   })
     .index("by_property_id", ["propertyId"])
@@ -208,6 +243,7 @@ export default defineSchema({
     usedOpenAI: v.boolean(),
     usedFallback: v.boolean(),
     sentiment: v.string(),
+    tripContext: v.optional(tripContextValidator),
     createdAt: v.string(),
     updatedAt: v.string(),
   }).index("by_property_id", ["propertyId"]),

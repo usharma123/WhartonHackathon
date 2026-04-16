@@ -10,6 +10,7 @@ import type {
 import {
   buildExpediaFacetEvidence,
   buildLiveReviewSamples,
+  combineSourceAwareLiveSignals,
   deriveLiveFacetSignals,
 } from "./propertySource.js";
 import { ALL_RUNTIME_FACETS, FACET_POLICIES } from "./facets.js";
@@ -61,7 +62,12 @@ async function applyImportedSnapshot(
       sourceUrl: snapshot.sourceUrl,
       lastValidatedAt: snapshot.importedAt,
       validationStatus: "success",
+      vendorReviewCount: snapshot.reviews.length,
+      firstPartyReviewCount: 0,
       liveReviewCount: snapshot.reviews.length,
+      lastRecomputedAt: undefined,
+      recomputeStatus: "recomputing",
+      recomputeSourceVersion: 0,
     });
   }
 
@@ -70,7 +76,7 @@ async function applyImportedSnapshot(
     throw new Error(`Unknown property ${snapshot.propertyId}`);
   }
 
-  const liveSignals =
+  const vendorSignals =
     snapshot.reviews.length > 0
       ? deriveLiveFacetSignals(
           snapshot.propertyId,
@@ -116,7 +122,7 @@ async function applyImportedSnapshot(
 
   const baseMetrics = await store.listPropertyFacetMetrics(snapshot.propertyId);
   if (baseMetrics.length === 0) {
-    for (const metric of buildBootstrapMetrics(snapshot.propertyId, liveSignals, classifierArtifact)) {
+    for (const metric of buildBootstrapMetrics(snapshot.propertyId, vendorSignals, classifierArtifact)) {
       await store.upsertPropertyFacetMetric(metric);
     }
   }
@@ -136,12 +142,15 @@ async function applyImportedSnapshot(
         sourceUrl: snapshot.sourceUrl,
         lastValidatedAt: snapshot.importedAt,
         validationStatus: "success",
-        liveReviewCount: snapshot.reviews.length,
+        recomputeStatus: "recomputing",
       })
     : (await store.getProperty(snapshot.propertyId))!;
 
-  await store.replacePropertyLiveReviews(snapshot.propertyId, liveReviews);
-  await store.replacePropertyFacetLiveSignals(snapshot.propertyId, liveSignals);
+  await store.replacePropertyLiveReviewsForVendor(
+    snapshot.propertyId,
+    "expedia",
+    liveReviews,
+  );
 
   for (const facet of ALL_RUNTIME_FACETS) {
     await store.replacePropertyFacetVendorEvidence(
@@ -152,7 +161,48 @@ async function applyImportedSnapshot(
     );
   }
 
-  return updatedProperty;
+  const combinedLiveReviews = await store.listPropertyLiveReviews(snapshot.propertyId);
+  const firstPartyReviews = combinedLiveReviews.filter(
+    (review) => review.sourceVendor === "first_party",
+  );
+  const liveSignals = combineSourceAwareLiveSignals({
+    propertyId: snapshot.propertyId,
+    facetListingTexts: snapshot.facetListingTexts,
+    vendorReviews: combinedLiveReviews
+      .filter((review) => review.sourceVendor === "expedia")
+      .map((review) => ({
+        headline: review.headline,
+        text: review.text,
+        reviewDate: review.reviewDate,
+      })),
+    firstPartyReviews: firstPartyReviews.map((review) => ({
+      headline: review.headline,
+      text: review.text,
+      reviewDate: review.reviewDate,
+    })),
+    classifierArtifact,
+    fetchedAt: snapshot.importedAt,
+  });
+  await store.replacePropertyFacetLiveSignals(snapshot.propertyId, liveSignals);
+
+  const firstPartySavedReviews = await store.listUserPropertyReviews(snapshot.propertyId);
+  const blendedGuestRating = computeBlendedGuestRating(
+    snapshot.guestRating,
+    snapshot.reviews.length,
+    firstPartySavedReviews,
+  );
+  const priorVersion = updatedProperty.recomputeSourceVersion ?? 0;
+  await store.patchProperty(snapshot.propertyId, {
+    guestRating: blendedGuestRating,
+    vendorReviewCount: snapshot.reviews.length,
+    firstPartyReviewCount: firstPartySavedReviews.length,
+    liveReviewCount: combinedLiveReviews.length,
+    lastRecomputedAt: snapshot.importedAt,
+    recomputeStatus: "ready",
+    recomputeSourceVersion: priorVersion + 1,
+  });
+
+  return (await store.getProperty(snapshot.propertyId)) ?? updatedProperty;
 }
 
 function buildListingOnlyLiveSignals(
@@ -163,13 +213,21 @@ function buildListingOnlyLiveSignals(
     facet,
     mentionRate: 0,
     conflictScore: 0,
-    latestReviewDate: undefined,
-    daysSince: 9999,
-    listingTextPresent: Boolean(snapshot.facetListingTexts[facet]),
-    reviewCountSampled: 0,
-    supportSnippetCount: 0,
-    fetchedAt: snapshot.importedAt,
-  }));
+      latestReviewDate: undefined,
+      daysSince: 9999,
+      listingTextPresent: Boolean(snapshot.facetListingTexts[facet]),
+      reviewCountSampled: 0,
+      supportSnippetCount: 0,
+      vendorReviewCountSampled: 0,
+      vendorSupportSnippetCount: 0,
+      firstPartyReviewCountSampled: 0,
+      firstPartySupportSnippetCount: 0,
+      sampleConfidence: 0,
+      weightedSupportRate: 0,
+      evidenceMix: "none",
+      topDriver: "no_live_evidence",
+      fetchedAt: snapshot.importedAt,
+    }));
 }
 
 function buildBootstrapMetrics(
@@ -208,10 +266,44 @@ function buildBootstrapMetrics(
           : 0,
       validatedConflictScore: signal.conflictScore,
       listingTextPresent: signal.listingTextPresent,
+      sampleSize: signal.reviewCountSampled,
+      vendorSampleSize: signal.vendorReviewCountSampled,
+      firstPartySampleSize: signal.firstPartyReviewCountSampled,
+      sampleConfidence: signal.sampleConfidence,
+      evidenceMix: signal.evidenceMix,
+      topDriver: signal.topDriver,
     };
   });
 }
 
 function roundMetric(value: number): number {
   return Math.round(value * 1000) / 1000;
+}
+
+function computeBlendedGuestRating(
+  sourceGuestRating: number | undefined,
+  sourceReviewCount: number,
+  reviews: Array<{ overallRating?: number }>,
+): number | undefined {
+  const firstPartyRatings = reviews
+    .map((review) => review.overallRating)
+    .filter((rating): rating is number => typeof rating === "number" && Number.isFinite(rating));
+  const firstPartyCount = firstPartyRatings.length;
+  const firstPartyTotal = firstPartyRatings.reduce((sum, rating) => sum + rating, 0);
+  const seedCount = Math.max(0, sourceReviewCount);
+  const seedRating =
+    typeof sourceGuestRating === "number" && Number.isFinite(sourceGuestRating)
+      ? sourceGuestRating
+      : undefined;
+
+  if (firstPartyCount === 0) {
+    return seedRating;
+  }
+  if (seedRating === undefined || seedCount === 0) {
+    return roundMetric(firstPartyTotal / firstPartyCount);
+  }
+
+  return roundMetric(
+    ((seedRating * seedCount) + firstPartyTotal) / (seedCount + firstPartyCount),
+  );
 }

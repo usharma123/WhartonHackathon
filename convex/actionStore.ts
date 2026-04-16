@@ -18,6 +18,7 @@ const refs = {
   replacePropertyFacetVendorEvidence: "reviewGapInternal:replacePropertyFacetVendorEvidence",
   replacePropertyFacetSourceEvidence: "reviewGapInternal:replacePropertyFacetSourceEvidence",
   replacePropertyLiveReviews: "reviewGapInternal:replacePropertyLiveReviews",
+  replacePropertyLiveReviewsForVendor: "reviewGapInternal:replacePropertyLiveReviewsForVendor",
   upsertPropertyLiveReview: "reviewGapInternal:upsertPropertyLiveReview",
   createReviewSession: "reviewGapInternal:createReviewSession",
   getReviewSession: "reviewGapInternal:getReviewSession",
@@ -80,6 +81,13 @@ export function createConvexActionStore(ctx: ActionCtx): ReviewGapStore {
     },
     async replacePropertyLiveReviews(propertyId, reviews) {
       return ctx.runMutation(refs.replacePropertyLiveReviews as any, { propertyId, reviews });
+    },
+    async replacePropertyLiveReviewsForVendor(propertyId, vendor, reviews) {
+      return ctx.runMutation(refs.replacePropertyLiveReviewsForVendor as any, {
+        propertyId,
+        vendor,
+        reviews,
+      });
     },
     async upsertPropertyLiveReview(review) {
       return ctx.runMutation(refs.upsertPropertyLiveReview as any, { review });

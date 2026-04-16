@@ -124,6 +124,20 @@ export const replacePropertyLiveReviews = internalMutationGeneric({
     createConvexStore(ctx.db).replacePropertyLiveReviews(args.propertyId, args.reviews),
 });
 
+export const replacePropertyLiveReviewsForVendor = internalMutationGeneric({
+  args: {
+    propertyId: v.string(),
+    vendor: v.union(v.literal("expedia"), v.literal("first_party")),
+    reviews: v.array(v.any()),
+  },
+  handler: async (ctx, args) =>
+    createConvexStore(ctx.db).replacePropertyLiveReviewsForVendor(
+      args.propertyId,
+      args.vendor,
+      args.reviews,
+    ),
+});
+
 export const upsertPropertyLiveReview = internalMutationGeneric({
   args: { review: v.any() },
   handler: async (ctx, args) =>

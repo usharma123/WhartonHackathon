@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 import { createConvexStore } from "../src/backend/convexStore.js";
 import type { FacetClassifierArtifact } from "../src/backend/ml.js";
+import { rankFacetMetrics } from "../src/backend/scoring.js";
 import {
   createReviewSession as createReviewSessionService,
   getSessionSummary as getSessionSummaryService,
@@ -64,6 +65,12 @@ export const listDemoProperties = queryGeneric({
               }
             : {}),
           reviewCount: seedReviewCount + firstPartyReviews.length,
+          vendorReviewCount: runtimeDoc?.vendorReviewCount ?? seedReviewCount,
+          firstPartyReviewCount:
+            runtimeDoc?.firstPartyReviewCount ?? firstPartyReviews.length,
+          liveReviewCount: runtimeDoc?.liveReviewCount ?? firstPartyReviews.length,
+          lastRecomputedAt: runtimeDoc?.lastRecomputedAt ?? undefined,
+          recomputeStatus: runtimeDoc?.recomputeStatus ?? "idle",
           demoFlags: runtimeDoc?.demoFlags ?? [],
           ...(runtimeDoc?.demoScenario ? { demoScenario: runtimeDoc.demoScenario } : {}),
         };
@@ -84,7 +91,8 @@ export const listDemoProperties = queryGeneric({
 export const getPropertyDetail = queryGeneric({
   args: { propertyId: v.string() },
   handler: async (ctx, args) => {
-    const [sourceDoc, runtimeDoc, evidenceDocs, liveSignals, sourceReviews, userReviews] = await Promise.all([
+    const store = createConvexStore(ctx.db);
+    const [sourceDoc, runtimeDoc, evidenceDocs, liveSignals, sourceReviews, userReviews, metrics] = await Promise.all([
       ctx.db
         .query("sourceProperties")
         .withIndex("by_property_id", (q: any) => q.eq("propertyId", args.propertyId))
@@ -109,6 +117,7 @@ export const getPropertyDetail = queryGeneric({
         .query("userPropertyReviews")
         .withIndex("by_property_id", (q: any) => q.eq("propertyId", args.propertyId))
         .collect(),
+      store.listPropertyFacetMetrics(args.propertyId),
     ]);
     if (!sourceDoc) return null;
 
@@ -145,6 +154,27 @@ export const getPropertyDetail = queryGeneric({
       sourceReviews.length,
       userReviews.map((review) => ({ overallRating: review.overallRating ?? undefined })),
     );
+    const topProvenance = rankFacetMetrics(
+      metrics,
+      { mentionedFacets: [], likelyKnownFacets: [] },
+      { includeSecondaryFacets: true },
+    )[0];
+    const scoreProvenance = topProvenance
+      ? {
+          topFacet: topProvenance.facet,
+          summary: `${formatFacetLabel(topProvenance.facet)} is currently driven by ${
+            topProvenance.scoreBreakdown.topDriver ?? "deterministic ranking"
+          } with ${topProvenance.scoreBreakdown.sampleSize ?? 0} live reviews in scope.`,
+          sampleSize: topProvenance.scoreBreakdown.sampleSize ?? 0,
+          evidenceMix: topProvenance.scoreBreakdown.evidenceMix ?? "none",
+          topDriver: topProvenance.scoreBreakdown.topDriver ?? "deterministic_ranking",
+        }
+      : {
+          summary: "No live score provenance is available yet.",
+          sampleSize: 0,
+          evidenceMix: "none" as const,
+          topDriver: "no_live_evidence",
+        };
 
     return {
       propertyId: sourceDoc.propertyId,
@@ -166,7 +196,12 @@ export const getPropertyDetail = queryGeneric({
       demoFlags: runtimeDoc?.demoFlags ?? [],
       popularAmenities,
       amenityGroups,
+      vendorReviewCount: runtimeDoc?.vendorReviewCount ?? sourceReviews.length,
+      firstPartyReviewCount: runtimeDoc?.firstPartyReviewCount ?? userReviews.length,
       liveReviewCount: runtimeDoc?.liveReviewCount ?? 0,
+      lastRecomputedAt: runtimeDoc?.lastRecomputedAt ?? "",
+      recomputeStatus: runtimeDoc?.recomputeStatus ?? "idle",
+      scoreProvenance,
       highlights,
       liveSignalCount: liveSignals.length,
     };

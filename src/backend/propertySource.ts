@@ -4,6 +4,7 @@ import {
   type RuntimeFacet,
 } from "./facets.js";
 import type {
+  EvidenceMix,
   LiveReviewSample,
   PropertyFacetEvidence,
   PropertyFacetLiveSignal,
@@ -269,9 +270,63 @@ export function deriveLiveFacetSignalsFromReviewSnippets(
       listingTextPresent: Boolean(facetListingTexts[facet]),
       reviewCountSampled: reviews.length,
       supportSnippetCount: supportingReviews.length,
+      vendorReviewCountSampled: 0,
+      vendorSupportSnippetCount: 0,
+      firstPartyReviewCountSampled: 0,
+      firstPartySupportSnippetCount: 0,
+      sampleConfidence: roundRate(Math.min(1, reviews.length / 6)),
+      weightedSupportRate: roundRate(
+        supportingReviews.length / Math.max(1, reviews.length),
+      ),
+      evidenceMix: "none",
+      topDriver:
+        conflictingReviews.length > 0
+          ? "conflict_mentions"
+          : supportingReviews.length > 0
+            ? "support_mentions"
+            : "no_live_evidence",
       fetchedAt,
     };
   });
+}
+
+export function combineSourceAwareLiveSignals(args: {
+  propertyId: string;
+  facetListingTexts: Partial<Record<RuntimeFacet, string>>;
+  vendorReviews: ReviewSnippet[];
+  firstPartyReviews: ReviewSnippet[];
+  classifierArtifact: FacetClassifierArtifact | undefined;
+  fetchedAt: string;
+}): PropertyFacetLiveSignal[] {
+  const vendorSignals = deriveLiveFacetSignalsFromReviewSnippets(
+    args.propertyId,
+    args.facetListingTexts,
+    args.vendorReviews,
+    args.classifierArtifact,
+    args.fetchedAt,
+  );
+  const firstPartySignals = deriveLiveFacetSignalsFromReviewSnippets(
+    args.propertyId,
+    args.facetListingTexts,
+    args.firstPartyReviews,
+    args.classifierArtifact,
+    args.fetchedAt,
+  );
+  const vendorByFacet = new Map(vendorSignals.map((signal) => [signal.facet, signal] as const));
+  const firstPartyByFacet = new Map(
+    firstPartySignals.map((signal) => [signal.facet, signal] as const),
+  );
+
+  return ALL_RUNTIME_FACETS.map((facet) =>
+    combineFacetSignal(
+      args.propertyId,
+      facet,
+      args.facetListingTexts,
+      vendorByFacet.get(facet),
+      firstPartyByFacet.get(facet),
+      args.fetchedAt,
+    ),
+  );
 }
 
 export function buildExpediaFacetEvidence(
@@ -550,6 +605,72 @@ function reviewMentionsFacet(
   return FACET_POLICIES[facet].reviewPatterns.some((pattern) => pattern.test(text));
 }
 
+function combineFacetSignal(
+  propertyId: string,
+  facet: RuntimeFacet,
+  facetListingTexts: Partial<Record<RuntimeFacet, string>>,
+  vendorSignal: PropertyFacetLiveSignal | undefined,
+  firstPartySignal: PropertyFacetLiveSignal | undefined,
+  fetchedAt: string,
+): PropertyFacetLiveSignal {
+  const vendorCount = vendorSignal?.reviewCountSampled ?? 0;
+  const firstPartyCount = firstPartySignal?.reviewCountSampled ?? 0;
+  const vendorSupport = vendorSignal?.supportSnippetCount ?? 0;
+  const firstPartySupport = firstPartySignal?.supportSnippetCount ?? 0;
+  const vendorWeight = vendorCount > 0 ? 1 : 0;
+  const firstPartyWeight =
+    firstPartyCount > 0 ? Math.min(0.65, 0.2 + firstPartyCount * 0.15) : 0;
+  const totalWeight = Math.max(1, vendorWeight + firstPartyWeight);
+  const combinedMentionRate = roundRate(
+    ((vendorSignal?.mentionRate ?? 0) * vendorWeight +
+      (firstPartySignal?.mentionRate ?? 0) * firstPartyWeight) /
+      totalWeight,
+  );
+  const rawConflictScore = roundRate(
+    ((vendorSignal?.conflictScore ?? 0) * vendorWeight +
+      (firstPartySignal?.conflictScore ?? 0) * firstPartyWeight) /
+      totalWeight,
+  );
+  const supportCount = vendorSupport + firstPartySupport;
+  const sampleConfidence = roundRate(
+    Math.min(1, vendorCount / 6 + firstPartyCount / 10),
+  );
+  const weightedSupportRate = roundRate(
+    ((vendorCount > 0 ? vendorSupport / vendorCount : 0) * vendorWeight +
+      (firstPartyCount > 0 ? firstPartySupport / firstPartyCount : 0) * firstPartyWeight) /
+      totalWeight,
+  );
+  const conflictScore =
+    supportCount >= 2 ? rawConflictScore : roundRate(rawConflictScore * sampleConfidence);
+  const latestReviewDate = latestDate(
+    [vendorSignal?.latestReviewDate, firstPartySignal?.latestReviewDate].filter(
+      (value): value is string => Boolean(value),
+    ),
+  );
+  const evidenceMix = deriveEvidenceMix(vendorCount, firstPartyCount);
+
+  return {
+    propertyId,
+    facet,
+    mentionRate: combinedMentionRate,
+    conflictScore,
+    latestReviewDate,
+    daysSince: latestReviewDate ? daysSinceIsoDate(latestReviewDate, fetchedAt) : 9999,
+    listingTextPresent: Boolean(facetListingTexts[facet]),
+    reviewCountSampled: vendorCount + firstPartyCount,
+    supportSnippetCount: supportCount,
+    vendorReviewCountSampled: vendorCount,
+    vendorSupportSnippetCount: vendorSupport,
+    firstPartyReviewCountSampled: firstPartyCount,
+    firstPartySupportSnippetCount: firstPartySupport,
+    sampleConfidence,
+    weightedSupportRate,
+    evidenceMix,
+    topDriver: deriveTopDriver(vendorSignal, firstPartySignal, supportCount),
+    fetchedAt,
+  };
+}
+
 function latestDate(values: string[]): string | undefined {
   return values
     .map((value) => ({ original: value, parsed: Date.parse(value) }))
@@ -658,6 +779,42 @@ function normalizeCountry(value: string | undefined): string | undefined {
 
 function roundRate(value: number): number {
   return Math.max(0, Math.min(1, Math.round(value * 1000) / 1000));
+}
+
+function deriveEvidenceMix(
+  vendorCount: number,
+  firstPartyCount: number,
+): EvidenceMix {
+  if (vendorCount > 0 && firstPartyCount > 0) {
+    return "blended";
+  }
+  if (vendorCount > 0) {
+    return "vendor";
+  }
+  if (firstPartyCount > 0) {
+    return "first_party";
+  }
+  return "none";
+}
+
+function deriveTopDriver(
+  vendorSignal: PropertyFacetLiveSignal | undefined,
+  firstPartySignal: PropertyFacetLiveSignal | undefined,
+  supportCount: number,
+): string {
+  if ((firstPartySignal?.conflictScore ?? 0) > (vendorSignal?.conflictScore ?? 0) + 0.03) {
+    return "first_party_conflict";
+  }
+  if ((vendorSignal?.conflictScore ?? 0) > 0.01) {
+    return "vendor_conflict";
+  }
+  if ((firstPartySignal?.supportSnippetCount ?? 0) > (vendorSignal?.supportSnippetCount ?? 0)) {
+    return "first_party_support";
+  }
+  if ((vendorSignal?.supportSnippetCount ?? 0) > 0) {
+    return "vendor_support";
+  }
+  return supportCount > 0 ? "support_mentions" : "no_live_evidence";
 }
 
 function stableReviewHash(value: string): string {

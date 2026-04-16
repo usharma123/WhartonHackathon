@@ -46,6 +46,11 @@ export interface ReviewGapStore {
     propertyId: string,
     reviews: LiveReviewSample[],
   ): Promise<void>;
+  replacePropertyLiveReviewsForVendor(
+    propertyId: string,
+    vendor: LiveReviewSample["sourceVendor"],
+    reviews: LiveReviewSample[],
+  ): Promise<void>;
   upsertPropertyLiveReview(review: LiveReviewSample): Promise<void>;
   createReviewSession(
     session: Omit<StoredReviewSession, "id">,
@@ -149,7 +154,12 @@ export class InMemoryReviewGapStore implements ReviewGapStore {
       sourceUrl: property.sourceUrl,
       lastValidatedAt: property.lastValidatedAt,
       validationStatus: property.validationStatus ?? "idle",
+      vendorReviewCount: property.vendorReviewCount ?? 0,
+      firstPartyReviewCount: property.firstPartyReviewCount ?? 0,
       liveReviewCount: property.liveReviewCount ?? 0,
+      lastRecomputedAt: property.lastRecomputedAt,
+      recomputeStatus: property.recomputeStatus ?? "idle",
+      recomputeSourceVersion: property.recomputeSourceVersion ?? 0,
     };
   }
 
@@ -249,6 +259,22 @@ export class InMemoryReviewGapStore implements ReviewGapStore {
     for (const key of [...this.liveReviews.keys()]) {
       const review = this.liveReviews.get(key);
       if (review?.propertyId === propertyId) {
+        this.liveReviews.delete(key);
+      }
+    }
+    for (const review of reviews) {
+      this.liveReviews.set(reviewKey(review), review);
+    }
+  }
+
+  async replacePropertyLiveReviewsForVendor(
+    propertyId: string,
+    vendor: LiveReviewSample["sourceVendor"],
+    reviews: LiveReviewSample[],
+  ): Promise<void> {
+    for (const key of [...this.liveReviews.keys()]) {
+      const review = this.liveReviews.get(key);
+      if (review?.propertyId === propertyId && review.sourceVendor === vendor) {
         this.liveReviews.delete(key);
       }
     }

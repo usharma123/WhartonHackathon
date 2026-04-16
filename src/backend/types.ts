@@ -4,6 +4,7 @@ export type ReliabilityClass = "high" | "medium" | "low" | "blocked";
 export type SessionSentiment = "positive" | "negative" | "mixed" | "neutral";
 export type PropertySourceVendor = "expedia" | "first_party";
 export type PropertyValidationStatus = "idle" | "refreshing" | "success" | "error";
+export type PropertyRecomputeStatus = "idle" | "recomputing" | "ready" | "error";
 export type ConversationStage =
   | "collecting_review"
   | "facet_followup"
@@ -20,6 +21,19 @@ export type AspectRatings = {
   amenities?: number;
   value?: number;
 };
+export type TripType = "business" | "couple" | "family" | "solo" | "friends" | "other";
+export type StayLengthBucket = "1_night" | "2_3_nights" | "4_plus_nights";
+export type ArrivalTimeBucket = "morning" | "afternoon" | "evening" | "late_night";
+export type FactPolarity = SessionSentiment;
+export type FactSeverity = "low" | "medium" | "high";
+export type EvidenceMix = "vendor" | "first_party" | "blended" | "none";
+
+export interface TripContext {
+  tripType?: TripType;
+  stayLengthBucket?: StayLengthBucket;
+  arrivalTimeBucket?: ArrivalTimeBucket;
+  roomType?: string;
+}
 
 export interface PropertyRecord {
   propertyId: string;
@@ -37,7 +51,12 @@ export interface PropertyRecord {
   sourceUrl?: string;
   lastValidatedAt?: string;
   validationStatus?: PropertyValidationStatus;
+  vendorReviewCount?: number;
+  firstPartyReviewCount?: number;
   liveReviewCount?: number;
+  lastRecomputedAt?: string;
+  recomputeStatus?: PropertyRecomputeStatus;
+  recomputeSourceVersion?: number;
 }
 
 export interface PropertyFacetMetric {
@@ -54,6 +73,12 @@ export interface PropertyFacetMetric {
   validatedConflictCount: number;
   validatedConflictScore: number;
   listingTextPresent: boolean;
+  sampleSize?: number;
+  vendorSampleSize?: number;
+  firstPartySampleSize?: number;
+  sampleConfidence?: number;
+  evidenceMix?: EvidenceMix;
+  topDriver?: string;
 }
 
 export interface PropertyFacetEvidence {
@@ -111,6 +136,14 @@ export interface PropertyFacetLiveSignal {
   listingTextPresent: boolean;
   reviewCountSampled: number;
   supportSnippetCount: number;
+  vendorReviewCountSampled: number;
+  vendorSupportSnippetCount: number;
+  firstPartyReviewCountSampled: number;
+  firstPartySupportSnippetCount: number;
+  sampleConfidence: number;
+  weightedSupportRate: number;
+  evidenceMix: EvidenceMix;
+  topDriver: string;
   fetchedAt: string;
 }
 
@@ -120,7 +153,12 @@ export interface PropertyValidationState {
   sourceUrl?: string;
   lastValidatedAt?: string;
   validationStatus: PropertyValidationStatus;
+  vendorReviewCount?: number;
+  firstPartyReviewCount?: number;
   liveReviewCount: number;
+  lastRecomputedAt?: string;
+  recomputeStatus?: PropertyRecomputeStatus;
+  recomputeSourceVersion?: number;
 }
 
 export interface ImportedExpediaPropertySnapshot {
@@ -161,6 +199,9 @@ export interface ScoreBreakdown {
   alreadyMentionedPenalty: number;
   reviewerKnowsBoost: number;
   total: number;
+  sampleSize?: number;
+  evidenceMix?: EvidenceMix;
+  topDriver?: string;
 }
 
 export interface ReviewAnalysisResult {
@@ -187,11 +228,37 @@ export interface StructuredFact {
   factType: string;
   value: string | number | boolean;
   confidence: number;
+  firsthandConfidence?: number;
+  polarity?: FactPolarity;
+  severity?: FactSeverity;
+  resolved?: boolean;
+  sourceSnippet?: string;
 }
 
 export interface PropertyCardDelta {
   summary: string;
   addedFacts: StructuredFact[];
+}
+
+export interface FactCandidate extends StructuredFact {
+  id: string;
+  source: "draft_review" | "follow_up_answer";
+  sourceText: string;
+  editable: boolean;
+  selectedByDefault: boolean;
+}
+
+export interface EditedFactInput {
+  id: string;
+  value: string | number | boolean;
+}
+
+export interface ScoreProvenanceSummary {
+  topFacet?: RuntimeFacet;
+  summary: string;
+  sampleSize: number;
+  evidenceMix: EvidenceMix;
+  topDriver: string;
 }
 
 type SelectNextQuestionBase = {
@@ -271,6 +338,7 @@ export interface StoredReviewSession {
   usedOpenAI: boolean;
   usedFallback: boolean;
   sentiment: SessionSentiment;
+  tripContext?: TripContext;
   createdAt: string;
   updatedAt: string;
 }

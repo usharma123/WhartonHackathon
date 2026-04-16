@@ -87,7 +87,12 @@ export function createConvexStore(db: ConvexDb): ReviewGapStore {
         sourceUrl: property.sourceUrl,
         lastValidatedAt: property.lastValidatedAt,
         validationStatus: property.validationStatus ?? "idle",
+        vendorReviewCount: property.vendorReviewCount ?? 0,
+        firstPartyReviewCount: property.firstPartyReviewCount ?? 0,
         liveReviewCount: property.liveReviewCount ?? 0,
+        lastRecomputedAt: property.lastRecomputedAt,
+        recomputeStatus: property.recomputeStatus ?? "idle",
+        recomputeSourceVersion: property.recomputeSourceVersion ?? 0,
       } satisfies PropertyValidationState;
     },
 
@@ -210,6 +215,21 @@ export function createConvexStore(db: ConvexDb): ReviewGapStore {
         .collect();
       for (const row of existing) {
         await db.delete(row._id);
+      }
+      for (const review of reviews) {
+        await db.insert("propertyLiveReviews", review);
+      }
+    },
+
+    async replacePropertyLiveReviewsForVendor(propertyId, vendor, reviews) {
+      const existing = await db
+        .query("propertyLiveReviews")
+        .withIndex("by_property_id", (q: any) => q.eq("propertyId", propertyId))
+        .collect();
+      for (const row of existing) {
+        if (row.sourceVendor === vendor) {
+          await db.delete(row._id);
+        }
       }
       for (const review of reviews) {
         await db.insert("propertyLiveReviews", review);
@@ -390,7 +410,12 @@ function propertyToDoc(property: PropertyRecord) {
     sourceUrl: property.sourceUrl,
     lastValidatedAt: property.lastValidatedAt,
     validationStatus: property.validationStatus,
+    vendorReviewCount: property.vendorReviewCount,
+    firstPartyReviewCount: property.firstPartyReviewCount,
     liveReviewCount: property.liveReviewCount,
+    lastRecomputedAt: property.lastRecomputedAt,
+    recomputeStatus: property.recomputeStatus,
+    recomputeSourceVersion: property.recomputeSourceVersion,
   });
 }
 
@@ -419,7 +444,12 @@ function mapProperty(doc: any): PropertyRecord {
     sourceUrl: doc.sourceUrl ?? undefined,
     lastValidatedAt: doc.lastValidatedAt ?? undefined,
     validationStatus: doc.validationStatus ?? undefined,
+    vendorReviewCount: doc.vendorReviewCount ?? undefined,
+    firstPartyReviewCount: doc.firstPartyReviewCount ?? undefined,
     liveReviewCount: doc.liveReviewCount ?? undefined,
+    lastRecomputedAt: doc.lastRecomputedAt ?? undefined,
+    recomputeStatus: doc.recomputeStatus ?? undefined,
+    recomputeSourceVersion: doc.recomputeSourceVersion ?? undefined,
   };
 }
 
@@ -438,6 +468,12 @@ function mapMetric(doc: any): PropertyFacetMetric {
     validatedConflictCount: doc.validatedConflictCount,
     validatedConflictScore: doc.validatedConflictScore,
     listingTextPresent: doc.listingTextPresent,
+    sampleSize: doc.sampleSize ?? undefined,
+    vendorSampleSize: doc.vendorSampleSize ?? undefined,
+    firstPartySampleSize: doc.firstPartySampleSize ?? undefined,
+    sampleConfidence: doc.sampleConfidence ?? undefined,
+    evidenceMix: doc.evidenceMix ?? undefined,
+    topDriver: doc.topDriver ?? undefined,
   };
 }
 
@@ -463,6 +499,14 @@ function mapLiveSignal(doc: any): PropertyFacetLiveSignal {
     listingTextPresent: doc.listingTextPresent,
     reviewCountSampled: doc.reviewCountSampled,
     supportSnippetCount: doc.supportSnippetCount,
+    vendorReviewCountSampled: doc.vendorReviewCountSampled ?? 0,
+    vendorSupportSnippetCount: doc.vendorSupportSnippetCount ?? 0,
+    firstPartyReviewCountSampled: doc.firstPartyReviewCountSampled ?? 0,
+    firstPartySupportSnippetCount: doc.firstPartySupportSnippetCount ?? 0,
+    sampleConfidence: doc.sampleConfidence ?? 0,
+    weightedSupportRate: doc.weightedSupportRate ?? 0,
+    evidenceMix: doc.evidenceMix ?? "none",
+    topDriver: doc.topDriver ?? "no_live_evidence",
     fetchedAt: doc.fetchedAt,
   };
 }
@@ -503,6 +547,7 @@ function mapSession(doc: any): StoredReviewSession {
     usedOpenAI: doc.usedOpenAI ?? false,
     usedFallback: doc.usedFallback ?? false,
     sentiment: doc.sentiment,
+    tripContext: doc.tripContext ?? undefined,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };

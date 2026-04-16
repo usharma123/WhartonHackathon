@@ -45,10 +45,20 @@ export function applyLiveSignalToMetric(
     mentionRate: signal.mentionRate,
     daysSince: signal.daysSince,
     stalenessScore: round(normalizeStaleness(signal.daysSince)),
+    matchedReviewRate: signal.weightedSupportRate,
+    meanCosMatchedReviews: round(
+      Math.max(metric.meanCosMatchedReviews * 0.6, signal.sampleConfidence),
+    ),
     validatedConflictScore: signal.conflictScore,
     validatedConflictCount:
       signal.conflictScore > 0 ? Math.max(metric.validatedConflictCount, 1) : 0,
     listingTextPresent: signal.listingTextPresent,
+    sampleSize: signal.reviewCountSampled,
+    vendorSampleSize: signal.vendorReviewCountSampled,
+    firstPartySampleSize: signal.firstPartyReviewCountSampled,
+    sampleConfidence: signal.sampleConfidence,
+    evidenceMix: signal.evidenceMix,
+    topDriver: signal.topDriver,
   };
 }
 
@@ -62,16 +72,20 @@ export function buildScoreBreakdown(
   const reviewerKnowsBoost = analysis.likelyKnownFacets.includes(metric.facet)
     ? REVIEWER_KNOWS_BOOST
     : 0;
+  const sampleConfidence = clamp(metric.sampleConfidence ?? 1, 0.25, 1);
 
   const breakdown: ScoreBreakdown = {
     importance: round(metric.importance * 0.25),
     staleness: round(metric.stalenessScore * 0.25),
-    conflict: round(normalizeConflict(metric.validatedConflictScore) * 0.2),
-    coverageGap: round((1 - metric.mentionRate) * 0.15),
-    matchedSupportGap: round((1 - matchedSupport(metric)) * 0.15),
+    conflict: round(normalizeConflict(metric.validatedConflictScore) * 0.2 * sampleConfidence),
+    coverageGap: round((1 - metric.mentionRate) * 0.15 * sampleConfidence),
+    matchedSupportGap: round((1 - matchedSupport(metric)) * 0.15 * sampleConfidence),
     alreadyMentionedPenalty: round(alreadyMentionedPenalty),
     reviewerKnowsBoost: round(reviewerKnowsBoost),
     total: 0,
+    sampleSize: metric.sampleSize,
+    evidenceMix: metric.evidenceMix,
+    topDriver: metric.topDriver,
   };
 
   breakdown.total = round(
