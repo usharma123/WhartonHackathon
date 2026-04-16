@@ -107,7 +107,9 @@ export const confirmEnhancedReview = actionGeneric({
   args: {
     sessionId: v.string(),
     finalReviewText: v.string(),
-    structuredFacts: v.array(v.any()),
+    factCandidates: v.array(v.any()),
+    confirmedFactIds: v.array(v.string()),
+    editedFacts: v.optional(v.array(v.any())),
   },
   handler: async (ctx, args) => {
     const tokenIdentifier = await requireTokenIdentifier(ctx);
@@ -125,7 +127,9 @@ export const confirmEnhancedReview = actionGeneric({
       {
         sessionId: args.sessionId,
         finalReviewText: args.finalReviewText,
-        structuredFacts: args.structuredFacts,
+        factCandidates: args.factCandidates,
+        confirmedFactIds: args.confirmedFactIds,
+        editedFacts: args.editedFacts,
         tokenIdentifier,
       },
       sourceReviewAggregate

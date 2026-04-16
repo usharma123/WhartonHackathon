@@ -122,6 +122,8 @@ export interface UserPropertyReview {
   sentiment: SessionSentiment;
   answerCount: number;
   factCount: number;
+  tripContext?: TripContext;
+  submissionCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -312,7 +314,8 @@ export interface SubmitFollowUpAnswerResult {
 
 export interface FinalizeReviewPreviewResult {
   reviewText: string;
-  structuredFacts: StructuredFact[];
+  factCandidates: FactCandidate[];
+  tripContext?: TripContext;
   overallRating?: number;
   aspectRatings?: AspectRatings;
   usedOpenAI: boolean;
@@ -425,7 +428,9 @@ export interface UpdateStructuredReviewInput {
 export interface ConfirmEnhancedReviewInput {
   sessionId: string;
   finalReviewText: string;
-  structuredFacts: StructuredFact[];
+  factCandidates: FactCandidate[];
+  confirmedFactIds: string[];
+  editedFacts?: EditedFactInput[];
 }
 
 export interface SessionSummary {

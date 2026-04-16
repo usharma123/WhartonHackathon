@@ -319,11 +319,25 @@ export function extractAnswerFactsFallback(args: {
       factType: "freeform_note",
       value: text,
       confidence: 0.35,
+      firsthandConfidence: 0.82,
+      polarity: detectSentiment(lower),
+      severity: "low",
+      resolved: undefined,
+      sourceSnippet: args.answerText,
     });
   }
 
+  const enrichedFacts = dedupeFacts(facts).map((fact) => ({
+    ...fact,
+    firsthandConfidence: fact.firsthandConfidence ?? 0.84,
+    polarity: fact.polarity ?? detectSentiment(lower),
+    severity: fact.severity ?? inferFactSeverity(args.answerText),
+    resolved: fact.resolved ?? inferResolvedState(args.answerText),
+    sourceSnippet: fact.sourceSnippet ?? args.answerText,
+  }));
+
   return {
-    structuredFacts: dedupeFacts(facts),
+    structuredFacts: enrichedFacts,
     confidence: Math.min(0.85, facts.length > 0 ? 0.5 + facts.length * 0.08 : 0.3),
   };
 }
@@ -434,6 +448,7 @@ function addBooleanFact(
     factType,
     value: positive && !negative,
     confidence: 0.62,
+    polarity: positive && negative ? "mixed" : positive ? "positive" : "negative",
   });
 }
 
@@ -454,6 +469,7 @@ function addNumberFact(
     factType,
     value: value * unit,
     confidence: 0.7,
+    polarity: detectSentiment(text),
   });
 }
 
@@ -472,6 +488,7 @@ function addTimeFact(
     factType,
     value: match[1].replace(/\s+/g, ""),
     confidence: 0.74,
+    polarity: detectSentiment(text),
   });
 }
 
@@ -490,6 +507,7 @@ function addMoneyFact(
     factType,
     value: Number.parseFloat(match[1]),
     confidence: 0.72,
+    polarity: "negative",
   });
 }
 
@@ -503,4 +521,26 @@ function dedupeFacts(facts: StructuredFact[]): StructuredFact[] {
     seen.add(key);
     return true;
   });
+}
+
+function inferFactSeverity(text: string): "low" | "medium" | "high" {
+  const normalized = text.toLowerCase();
+  if (/\b(stole|unsafe|filthy|bugs|bed bugs|charged twice|disaster)\b/.test(normalized)) {
+    return "high";
+  }
+  if (/\b(wait|dirty|rude|problem|issue|closed|fee|charge|noisy)\b/.test(normalized)) {
+    return "medium";
+  }
+  return "low";
+}
+
+function inferResolvedState(text: string): boolean | undefined {
+  const normalized = text.toLowerCase();
+  if (/\b(fixed|resolved|sorted out|made it right|eventually helped)\b/.test(normalized)) {
+    return true;
+  }
+  if (/\b(still|never|didn't|did not|wasn't|was not|unresolved)\b/.test(normalized)) {
+    return false;
+  }
+  return undefined;
 }

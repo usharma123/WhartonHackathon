@@ -34,6 +34,11 @@ type DemoProperty = {
   propertySummary: string;
   popularAmenities?: string;
   reviewCount: number;
+  vendorReviewCount?: number;
+  firstPartyReviewCount?: number;
+  liveReviewCount?: number;
+  lastRecomputedAt?: string;
+  recomputeStatus?: string;
   demoFlags: string[];
   demoScenario?: string;
 };
@@ -49,10 +54,16 @@ type ChatMessage =
   | { id: string; role: "user"; text: string };
 
 type Fact = {
+  id: string;
   facet: string;
   factType: string;
   value: unknown;
   confidence: number;
+  source: "draft_review" | "follow_up_answer";
+  sourceText: string;
+  editable: boolean;
+  selected: boolean;
+  editedValue: string;
 };
 
 type AspectRatings = {
@@ -60,6 +71,13 @@ type AspectRatings = {
   cleanliness?: number;
   amenities?: number;
   value?: number;
+};
+
+type TripContext = {
+  tripType?: string;
+  stayLengthBucket?: string;
+  arrivalTimeBucket?: string;
+  roomType?: string;
 };
 
 type NextTurn =
@@ -333,6 +351,7 @@ function AuthenticatedApp() {
   const [error, setError] = useState<string | null>(null);
   const [pendingFacet, setPendingFacet] = useState<string | null>(null);
   const [facts, setFacts] = useState<Fact[]>([]);
+  const [tripContext, setTripContext] = useState<TripContext | null>(null);
   const [wrappedUp, setWrappedUp] = useState(false);
   const [hasDraft, setHasDraft] = useState(false);
   const [reviewDraft, setReviewDraft] = useState("");
@@ -386,6 +405,7 @@ function AuthenticatedApp() {
     setDraft("");
     setPendingFacet(null);
     setFacts([]);
+    setTripContext(null);
     setWrappedUp(false);
     setHasDraft(false);
     setReviewDraft("");
@@ -412,6 +432,7 @@ function AuthenticatedApp() {
 
   function backToGrid() {
     setView("grid");
+    setTripContext(null);
   }
 
   async function sendUserMessage() {
@@ -585,7 +606,7 @@ function AuthenticatedApp() {
       const nextAnswerHistory = [...answerHistory, answerText];
       setAnswerHistory(nextAnswerHistory);
 
-      const keepGoing = followUpCount < 3;
+      const keepGoing = followUpCount < 2;
       if (keepGoing && sessionId) {
         try {
           const conversationDraft = [activeReviewDraft, ...nextAnswerHistory].join(" ").trim();
@@ -628,7 +649,21 @@ function AuthenticatedApp() {
       revisionNotes: notes.length > 0 ? notes : undefined,
     });
 
-    setFacts(preview.structuredFacts);
+    setFacts(
+      preview.factCandidates.map((fact) => ({
+        id: fact.id,
+        facet: fact.facet,
+        factType: fact.factType,
+        value: fact.value,
+        confidence: fact.confidence,
+        source: fact.source,
+        sourceText: fact.sourceText,
+        editable: fact.editable,
+        selected: fact.selectedByDefault,
+        editedValue: formatFactValue(fact.value),
+      })),
+    );
+    setTripContext(preview.tripContext ?? null);
     setPreviewReviewText(preview.reviewText);
     setAwaitingConfirmation(true);
     setMessages((prev) => [
@@ -665,12 +700,24 @@ function AuthenticatedApp() {
         await confirmEnhancedReview({
           sessionId,
           finalReviewText: previewReviewText,
-          structuredFacts: facts.map((fact) => ({
+          factCandidates: facts.map((fact) => ({
+            id: fact.id,
             facet: String((fact as { facet?: string }).facet ?? ""),
             factType: fact.factType,
             value: fact.value as string | number | boolean,
             confidence: Number((fact as { confidence?: number }).confidence ?? 0.5),
+            source: fact.source,
+            sourceText: fact.sourceText,
+            editable: fact.editable,
+            selectedByDefault: fact.selected,
           })),
+          confirmedFactIds: facts.filter((fact) => fact.selected).map((fact) => fact.id),
+          editedFacts: facts
+            .filter((fact) => fact.selected && fact.editedValue.trim() !== formatFactValue(fact.value))
+            .map((fact) => ({
+              id: fact.id,
+              value: coerceFactInputValue(fact.value, fact.editedValue),
+            })),
         });
         setAwaitingConfirmation(false);
         setWrappedUp(true);
@@ -696,6 +743,22 @@ function AuthenticatedApp() {
       setIsThinking(false);
       setThinkingPhase(null);
     }
+  }
+
+  function toggleFactSelection(id: string) {
+    setFacts((prev) =>
+      prev.map((fact) =>
+        fact.id === id ? { ...fact, selected: !fact.selected } : fact,
+      ),
+    );
+  }
+
+  function updateFactValue(id: string, editedValue: string) {
+    setFacts((prev) =>
+      prev.map((fact) =>
+        fact.id === id ? { ...fact, editedValue } : fact,
+      ),
+    );
   }
 
   function onTextareaKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -751,6 +814,9 @@ function AuthenticatedApp() {
           canSend={canSend}
           sendLabel={sendLabel}
           facts={facts}
+          tripContext={tripContext}
+          onToggleFactSelection={toggleFactSelection}
+          onFactValueChange={updateFactValue}
           overallRating={overallRating}
           aspectRatings={aspectRatings}
           needsStructuredReview={needsStructuredReview}
@@ -879,6 +945,14 @@ function PropertyCard({
     if (n >= 7) return "Good";
     return "Okay";
   })();
+  const recomputeLabel =
+    p.recomputeStatus === "ready"
+      ? p.lastRecomputedAt
+        ? `recomputed ${formatShortDate(p.lastRecomputedAt)}`
+        : "recomputed"
+      : p.recomputeStatus === "recomputing"
+        ? "recomputing"
+        : null;
 
   return (
     <div className="prop-card" onClick={onViewDetail}>
@@ -899,6 +973,14 @@ function PropertyCard({
             <span className="rating-count">
               · {p.reviewCount} review{p.reviewCount === 1 ? "" : "s"}
             </span>
+          </div>
+        )}
+        {recomputeLabel && (
+          <div className="card-location">
+            {recomputeLabel}
+            {typeof p.firstPartyReviewCount === "number" && p.firstPartyReviewCount > 0
+              ? ` · ${p.firstPartyReviewCount} traveler`
+              : ""}
           </div>
         )}
       </div>
@@ -1320,6 +1402,9 @@ function ChatView({
   canSend,
   sendLabel,
   facts,
+  tripContext,
+  onToggleFactSelection,
+  onFactValueChange,
   overallRating,
   aspectRatings,
   needsStructuredReview,
@@ -1347,6 +1432,9 @@ function ChatView({
   canSend: boolean;
   sendLabel: string;
   facts: Fact[];
+  tripContext: TripContext | null;
+  onToggleFactSelection: (id: string) => void;
+  onFactValueChange: (id: string, value: string) => void;
   overallRating: number | null;
   aspectRatings: AspectRatings;
   needsStructuredReview: boolean;
@@ -1363,6 +1451,14 @@ function ChatView({
   const ratingLabel =
     typeof property?.guestRating === "number" ? property.guestRating.toFixed(1) : "\u2014";
   const reviewCount = property?.reviewCount ?? 0;
+  const recomputeMeta =
+    property?.recomputeStatus === "ready"
+      ? property.lastRecomputedAt
+        ? `Recomputed ${formatShortDate(property.lastRecomputedAt)}`
+        : "Recomputed"
+      : property?.recomputeStatus === "recomputing"
+        ? "Recomputing now"
+        : "Awaiting recompute";
 
   const realtimeSocketRef = useRef<WebSocket | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -1851,6 +1947,12 @@ function ChatView({
         <div className="dossier-section">
           <div className="dossier-label">About the subject</div>
           <p className="dossier-sum">{property?.propertySummary}</p>
+          <p className="dossier-sum">
+            {recomputeMeta}
+            {typeof property?.firstPartyReviewCount === "number"
+              ? ` · ${property.firstPartyReviewCount} traveler review${property.firstPartyReviewCount === 1 ? "" : "s"}`
+              : ""}
+          </p>
         </div>
 
         {facts.length > 0 && (
@@ -1862,12 +1964,58 @@ function ChatView({
             <div className="facts-index">
               {facts.map((fact, i) => (
                 <div className="fx-item" key={`${fact.factType}-${i}`}>
-                  <span className="fx-key">
+                  <label className="fx-key">
+                    <input
+                      type="checkbox"
+                      checked={fact.selected}
+                      disabled={!awaitingConfirmation}
+                      onChange={() => onToggleFactSelection(fact.id)}
+                    />
                     {formatFactLabel(fact)}
-                  </span>
-                  <span className="fx-val">{formatFactValue(fact.value)}</span>
+                  </label>
+                  {awaitingConfirmation && fact.editable ? (
+                    <input
+                      className="fx-val"
+                      value={fact.editedValue}
+                      onChange={(e) => onFactValueChange(fact.id, e.target.value)}
+                    />
+                  ) : (
+                    <span className="fx-val">{formatFactValue(fact.value)}</span>
+                  )}
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {tripContext && (
+          <div className="dossier-section">
+            <div className="dossier-label">Trip context</div>
+            <div className="facts-index">
+              {tripContext.tripType && (
+                <div className="fx-item">
+                  <span className="fx-key">trip type</span>
+                  <span className="fx-val">{tripContext.tripType.replaceAll("_", " ")}</span>
+                </div>
+              )}
+              {tripContext.stayLengthBucket && (
+                <div className="fx-item">
+                  <span className="fx-key">stay length</span>
+                  <span className="fx-val">{tripContext.stayLengthBucket.replaceAll("_", " ")}</span>
+                </div>
+              )}
+              {tripContext.arrivalTimeBucket && (
+                <div className="fx-item">
+                  <span className="fx-key">arrival</span>
+                  <span className="fx-val">{tripContext.arrivalTimeBucket.replaceAll("_", " ")}</span>
+                </div>
+              )}
+              {tripContext.roomType && (
+                <div className="fx-item">
+                  <span className="fx-key">room type</span>
+                  <span className="fx-val">{tripContext.roomType}</span>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1897,6 +2045,17 @@ function formatFactValue(v: unknown): string {
   return String(v);
 }
 
+function coerceFactInputValue(originalValue: unknown, editedValue: string): string | number | boolean {
+  if (typeof originalValue === "boolean") {
+    return /^(true|yes|y|1)$/i.test(editedValue.trim());
+  }
+  if (typeof originalValue === "number") {
+    const parsed = Number.parseFloat(editedValue.trim());
+    return Number.isFinite(parsed) ? parsed : originalValue;
+  }
+  return editedValue.trim();
+}
+
 function formatFactLabel(fact: Fact): string {
   if (fact.factType === "review_detail") {
     return "from your review";
@@ -1905,6 +2064,17 @@ function formatFactLabel(fact: Fact): string {
     return "note";
   }
   return String(fact.factType ?? "").replaceAll("_", " ");
+}
+
+function formatShortDate(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function buildRatingSummary(

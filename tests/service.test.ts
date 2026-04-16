@@ -17,7 +17,7 @@ import {
 import { loadRuntimeBundle } from "../src/backend/runtimeBundle.node.js";
 import { seedRuntimeBundle } from "../src/backend/runtimeBundle.js";
 import { InMemoryReviewGapStore } from "../src/backend/store.js";
-import type { PropertyRecord } from "../src/backend/types.js";
+import type { FinalizeReviewPreviewResult, PropertyRecord } from "../src/backend/types.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const bundlePath = path.join(
@@ -34,6 +34,10 @@ const BREAKFAST_PROPERTY =
   "3216b1b7885bffdb336265a8de7322ba0cd477cfb3d4f99d19acf488f76a1941";
 const CHECKIN_PROPERTY =
   "ff26cdda236b233f7c481f0e896814075ac6bed335e162e0ff01d5491343f838";
+
+function selectedFactIds(preview: FinalizeReviewPreviewResult) {
+  return preview.factCandidates.filter((fact) => fact.selectedByDefault).map((fact) => fact.id);
+}
 
 async function createSeededStore() {
   const store = new InMemoryReviewGapStore();
@@ -125,7 +129,7 @@ describe("session flow", () => {
     const summary = await getSessionSummary(store, session.sessionId);
 
     expect(answer.answerRecorded).toBe(true);
-    expect(preview.structuredFacts).toEqual(
+    expect(preview.factCandidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ factType: "available" }),
         expect.objectContaining({ factType: "parking_fee", value: 18 }),
@@ -242,7 +246,8 @@ describe("session flow", () => {
       sessionId: session.sessionId,
       tokenIdentifier: "clerk:user_1",
       finalReviewText: preview.reviewText,
-      structuredFacts: preview.structuredFacts,
+      factCandidates: preview.factCandidates,
+      confirmedFactIds: selectedFactIds(preview),
     });
 
     const liveReviews = await store.listPropertyLiveReviews(PARKING_PROPERTY);
@@ -285,7 +290,8 @@ describe("session flow", () => {
       sessionId: firstSession.sessionId,
       tokenIdentifier: "clerk:user_1",
       finalReviewText: firstPreview.reviewText,
-      structuredFacts: firstPreview.structuredFacts,
+      factCandidates: firstPreview.factCandidates,
+      confirmedFactIds: selectedFactIds(firstPreview),
     });
     const secondSession = await createReviewSession(store, {
       propertyId: PARKING_PROPERTY,
@@ -304,14 +310,18 @@ describe("session flow", () => {
       sessionId: secondSession.sessionId,
       tokenIdentifier: "clerk:user_1",
       finalReviewText: secondPreview.reviewText,
-      structuredFacts: secondPreview.structuredFacts,
+      factCandidates: secondPreview.factCandidates,
+      confirmedFactIds: selectedFactIds(secondPreview),
     });
 
     const liveReviews = await store.listPropertyLiveReviews(PARKING_PROPERTY);
     const firstPartyReviews = liveReviews.filter((review) => review.sourceVendor === "first_party");
+    const savedReviews = await store.listUserPropertyReviews(PARKING_PROPERTY);
 
     expect(firstPartyReviews).toHaveLength(1);
     expect(firstPartyReviews[0]?.text).toContain("garage entrance");
+    expect(savedReviews).toHaveLength(1);
+    expect(savedReviews[0]?.submissionCount).toBe(2);
   });
 
   it("ignores 'I don't know' answers when extracting facts and drafting the preview", async () => {
@@ -328,7 +338,7 @@ describe("session flow", () => {
       draftReview: "The room was clean and the staff were friendly throughout the stay.",
     });
 
-    expect(preview.structuredFacts).toEqual(
+    expect(preview.factCandidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           factType: "review_detail",
@@ -336,7 +346,7 @@ describe("session flow", () => {
         }),
       ]),
     );
-    expect(preview.structuredFacts).not.toEqual(
+    expect(preview.factCandidates).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ factType: "freeform_note", value: "I don't know" }),
       ]),
@@ -367,7 +377,7 @@ describe("session flow", () => {
     });
 
     expect(preview.reviewText.toLowerCase()).not.toContain("art deco hotel");
-    expect(preview.structuredFacts).toEqual(
+    expect(preview.factCandidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ factType: "review_detail", value: "The decor was great" }),
         expect.objectContaining({ factType: "review_detail", value: "staff was great" }),
@@ -409,7 +419,8 @@ describe("session flow", () => {
         sessionId: session.sessionId,
         tokenIdentifier: "clerk:user_7",
         finalReviewText: preview.reviewText,
-        structuredFacts: preview.structuredFacts,
+        factCandidates: preview.factCandidates,
+        confirmedFactIds: selectedFactIds(preview),
       },
       { guestRating: 8, reviewCount: 4 },
     );
@@ -593,14 +604,15 @@ describe("session flow", () => {
     const summary = await getSessionSummary(store, session.sessionId);
 
     expect(afterPreview?.facetListingTexts).toEqual(before?.facetListingTexts);
-    expect(summary.extractedFacts.length).toBe(0);
+    expect(summary.extractedFacts.length).toBeGreaterThan(0);
     expect(summary.accumulatedEvidenceUpdates.length).toBe(0);
 
     await confirmEnhancedReview(store, {
       sessionId: session.sessionId,
       tokenIdentifier: "clerk:user_2",
       finalReviewText: preview.reviewText,
-      structuredFacts: preview.structuredFacts,
+      factCandidates: preview.factCandidates,
+      confirmedFactIds: selectedFactIds(preview),
     });
     const afterConfirm = await store.getProperty(PARKING_PROPERTY);
     const confirmedSummary = await getSessionSummary(store, session.sessionId);
@@ -670,6 +682,14 @@ describe("session flow", () => {
         listingTextPresent: true,
         reviewCountSampled: 8,
         supportSnippetCount: 4,
+        vendorReviewCountSampled: 8,
+        vendorSupportSnippetCount: 4,
+        firstPartyReviewCountSampled: 0,
+        firstPartySupportSnippetCount: 0,
+        sampleConfidence: 0.8,
+        weightedSupportRate: 0.5,
+        evidenceMix: "vendor",
+        topDriver: "Strong vendor evidence supports the current listing.",
         fetchedAt: "2026-04-14T00:00:00.000Z",
       },
       {
@@ -682,6 +702,14 @@ describe("session flow", () => {
         listingTextPresent: true,
         reviewCountSampled: 8,
         supportSnippetCount: 1,
+        vendorReviewCountSampled: 8,
+        vendorSupportSnippetCount: 1,
+        firstPartyReviewCountSampled: 0,
+        firstPartySupportSnippetCount: 0,
+        sampleConfidence: 0.8,
+        weightedSupportRate: 0.125,
+        evidenceMix: "vendor",
+        topDriver: "Recent vendor review conflicts suggest the listing may be stale.",
         fetchedAt: "2026-04-14T00:00:00.000Z",
       },
     ]);

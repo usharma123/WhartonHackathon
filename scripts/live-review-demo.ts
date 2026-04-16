@@ -80,7 +80,10 @@ async function main() {
   await confirmEnhancedReview(store, {
     sessionId: session.sessionId,
     finalReviewText: preview.reviewText,
-    structuredFacts: preview.structuredFacts,
+    factCandidates: preview.factCandidates,
+    confirmedFactIds: preview.factCandidates
+      .filter((fact) => fact.selectedByDefault)
+      .map((fact) => fact.id),
     tokenIdentifier: "demo:user",
   });
   const summary = await getSessionSummary(store, session.sessionId);

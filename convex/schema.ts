@@ -195,6 +195,8 @@ export default defineSchema({
     sentiment: v.string(),
     answerCount: v.number(),
     factCount: v.number(),
+    tripContext: v.optional(tripContextValidator),
+    submissionCount: v.number(),
     createdAt: v.string(),
     updatedAt: v.string(),
   })

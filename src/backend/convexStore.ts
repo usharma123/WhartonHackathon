@@ -642,6 +642,8 @@ function mapUserPropertyReview(doc: any): UserPropertyReview {
     sentiment: doc.sentiment,
     answerCount: doc.answerCount,
     factCount: doc.factCount,
+    tripContext: doc.tripContext ?? undefined,
+    submissionCount: doc.submissionCount ?? 1,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };

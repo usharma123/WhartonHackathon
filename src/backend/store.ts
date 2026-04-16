@@ -398,6 +398,7 @@ export class InMemoryReviewGapStore implements ReviewGapStore {
       ...review,
       id: existing?.id ?? this.nextId("review"),
       createdAt: existing?.createdAt ?? review.createdAt,
+      submissionCount: existing ? Math.max(existing.submissionCount + 1, review.submissionCount) : review.submissionCount,
     };
     this.userReviews.set(key, stored);
     return stored;
