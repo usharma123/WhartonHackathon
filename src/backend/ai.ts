@@ -299,7 +299,7 @@ export function sourceDiagnostics(args: {
 export class OpenAIReviewGapClient implements ReviewGapAIClient {
   constructor(
     private readonly openai: OpenAI,
-    private readonly model = "gpt-4o-mini",
+    private readonly model = "gpt-5.4-nano",
   ) {}
 
   async analyzeReview(input: {
