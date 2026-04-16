@@ -12,3 +12,5 @@ coverage
 
 # clerk configuration (can include secrets)
 /.clerk/
+.agents/
+
